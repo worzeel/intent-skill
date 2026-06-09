@@ -133,6 +133,28 @@ export function getIntentsBySession(db: IntentDatabase, sessionId: string): Inte
   return rows.map(toIntent);
 }
 
+export function getRecentIntents(db: IntentDatabase, limit: number): Intent[] {
+  const rows = db
+    .prepare("SELECT * FROM intent ORDER BY created_at DESC, rowid DESC LIMIT ?")
+    .all(limit) as IntentRow[];
+  return rows.map(toIntent);
+}
+
+export interface IntentStats {
+  intents: number;
+  lines: number;
+  files: number;
+}
+
+export function getStats(db: IntentDatabase): IntentStats {
+  const one = (sql: string): number => (db.prepare(sql).get() as { n: number }).n;
+  return {
+    intents: one("SELECT count(*) AS n FROM intent"),
+    lines: one("SELECT count(*) AS n FROM intent_line"),
+    files: one("SELECT count(DISTINCT file_path) AS n FROM intent_line"),
+  };
+}
+
 /**
  * Full-text search over summary + detail, ranked by bm25. `ftsQuery` must be a
  * valid FTS5 MATCH string (see toFtsQuery in query.ts). Returns intent ids,

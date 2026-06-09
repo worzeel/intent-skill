@@ -11,7 +11,9 @@ AI code provenance tracking for Claude Code. Captures *why* code was written, an
 - `src/capture.ts` — write-side business logic (git + db), transport-agnostic.
 - `src/query.ts` — read-side service: queries + query-time line resolution via `resolveAnchor`.
 - `src/mcp/` — `server` (MCP tool wiring) + `stdio` (entry point, `bin: mcp-intent-server`).
+- `src/hooks/` — `handler` (Claude Code hook logic) + `cli` (`bin: mcp-intent-hook`).
 - `src/index.ts` — public API barrel. `src/types.ts` — domain types.
+- `examples/` + [docs/claude-code-integration.md](docs/claude-code-integration.md) — `.mcp.json` + hooks config.
 
 ## Commands
 - `npm test` — vitest. `npm run typecheck`. `npm run build` → `dist/`.
@@ -25,4 +27,8 @@ AI code provenance tracking for Claude Code. Captures *why* code was written, an
   - Lines re-resolved at query time (`exact`/`fragment`/`drifted`/`missing`); only exact+fragment count for line coverage.
   - `get_intent` returns current line positions even after the file drifts; results carry `original_*` + current `line_*`.
   - search uses FTS5 bm25; free-text queries sanitised via `toFtsQuery` (token-quote + AND) to dodge FTS syntax errors.
-- Next: M4 auto-capture hooks (session-start context injection), then M5 CLI, M6 post-commit hook, M7 export.
+- **Milestone 4 done**: Claude Code integration — `mcp-intent-hook` CLI + `.mcp.json`/hooks config.
+  - SessionStart → repo provenance summary; PreToolUse(edits) → existing intent for the target file; PostToolUse(edits) → annotate nudge.
+  - Context injected via `hookSpecificOutput.additionalContext`; hook is fail-safe (errors exit 0, never blocks the session).
+  - Paths canonicalised (realpath both ends) so a symlinked cwd doesn't reject in-repo files.
+- Next: M5 CLI (human query interface), M6 post-commit hook (backfill commit_hash), M7 export.

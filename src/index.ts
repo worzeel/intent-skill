@@ -50,6 +50,19 @@ export {
   type ResolvedIntent,
   type ResolvedIntentLine,
 } from "./query.js";
+export { getRecentIntents, getStats, type IntentStats } from "./db/intents.js";
+
+// Claude Code hook integration
+export {
+  handleHook,
+  buildSessionStartContext,
+  buildPreEditContext,
+  buildPostEditReminder,
+  relevantFile,
+  type HookContext,
+  type HookInput,
+  type HookOutput,
+} from "./hooks/handler.js";
 
 // Git anchoring
 export { runGit, GitError, type GitRunOptions } from "./git/exec.js";
