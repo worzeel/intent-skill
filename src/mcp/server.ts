@@ -2,10 +2,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { annotateIntent, updateIntent, type CaptureContext } from "../capture.js";
+import {
+  getFileIntent,
+  getIntentAtLine,
+  getSessionIntent,
+  searchIntent,
+  type ResolvedIntent,
+} from "../query.js";
 
 /**
- * Write-side MCP server: exposes `annotate_intent` and `update_intent`. Thin
- * wiring over the capture service — all logic lives in src/capture.ts.
+ * MCP server: write-side (`annotate_intent`, `update_intent`) and read-side
+ * (`get_intent`, `search_intent`, `get_file_intent`, `get_session_intent`).
+ * Thin wiring over the capture and query services — all logic lives there.
  */
 
 function ok(payload: unknown): CallToolResult {
@@ -15,6 +23,30 @@ function ok(payload: unknown): CallToolResult {
 function fail(error: unknown): CallToolResult {
   const message = error instanceof Error ? error.message : String(error);
   return { isError: true, content: [{ type: "text", text: message }] };
+}
+
+/** Shape resolved intents into a stable, snake_case JSON result for clients. */
+function serialize(resolved: ResolvedIntent[]): unknown {
+  return {
+    intents: resolved.map((r) => ({
+      intent_id: r.intent.id,
+      summary: r.intent.summary,
+      detail: r.intent.detail,
+      task_ref: r.intent.taskRef,
+      session_id: r.intent.sessionId,
+      created_at: r.intent.createdAt,
+      lines: r.lines.map((l) => ({
+        file: l.line.filePath,
+        blob_hash: l.line.blobHash,
+        commit_hash: l.line.commitHash,
+        status: l.status,
+        line_start: l.currentLineStart,
+        line_end: l.currentLineEnd,
+        original_line_start: l.line.lineStart,
+        original_line_end: l.line.lineEnd,
+      })),
+    })),
+  };
 }
 
 export function createIntentServer(ctx: CaptureContext): McpServer {
@@ -92,6 +124,91 @@ export function createIntentServer(ctx: CaptureContext): McpServer {
           append: args.append,
         });
         return ok({ intent_id: intent.id, detail: intent.detail });
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_intent",
+    {
+      title: "Get intent at line",
+      description:
+        "All intents whose anchored code currently covers the given line in a " +
+        "file. Current position is re-resolved from the git blob hash at query time.",
+      inputSchema: {
+        file: z.string().describe("Path relative to the repo root"),
+        line: z.number().int().describe("Line number (1-based, current state)"),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(serialize(await getIntentAtLine(ctx, args.file, args.line)));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "search_intent",
+    {
+      title: "Search intent",
+      description:
+        "Full-text search across intent summaries and details. Optionally scope " +
+        "to a single file. Returns matches with current resolved file/line positions.",
+      inputSchema: {
+        query: z.string().describe("Free-text search query"),
+        file: z.string().optional().describe("Restrict to intents touching this file"),
+        limit: z.number().int().positive().optional().describe("Max results (default 20)"),
+      },
+    },
+    async (args) => {
+      try {
+        const results = await searchIntent(ctx, args.query, {
+          file: args.file,
+          limit: args.limit,
+        });
+        return ok(serialize(results));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_file_intent",
+    {
+      title: "Get file intent",
+      description:
+        "All intents for an entire file, ordered by current line position — a " +
+        "full provenance view before changing the file.",
+      inputSchema: {
+        file: z.string().describe("Path relative to the repo root"),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(serialize(await getFileIntent(ctx, args.file)));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_session_intent",
+    {
+      title: "Get session intent",
+      description: "All intents captured in a given Claude Code session.",
+      inputSchema: {
+        session_id: z.string().describe("Claude Code session id"),
+      },
+    },
+    async (args) => {
+      try {
+        return ok(serialize(await getSessionIntent(ctx, args.session_id)));
       } catch (error) {
         return fail(error);
       }

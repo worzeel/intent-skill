@@ -119,6 +119,56 @@ export function getIntentLines(db: IntentDatabase, intentId: string): IntentLine
   return rows.map(toIntentLine);
 }
 
+export function getIntentLinesByFile(db: IntentDatabase, filePath: string): IntentLine[] {
+  const rows = db
+    .prepare("SELECT * FROM intent_line WHERE file_path = ? ORDER BY rowid")
+    .all(filePath) as IntentLineRow[];
+  return rows.map(toIntentLine);
+}
+
+export function getIntentsBySession(db: IntentDatabase, sessionId: string): Intent[] {
+  const rows = db
+    .prepare("SELECT * FROM intent WHERE session_id = ? ORDER BY created_at, rowid")
+    .all(sessionId) as IntentRow[];
+  return rows.map(toIntent);
+}
+
+/**
+ * Full-text search over summary + detail, ranked by bm25. `ftsQuery` must be a
+ * valid FTS5 MATCH string (see toFtsQuery in query.ts). Returns intent ids,
+ * best match first, optionally restricted to intents touching `filePath`.
+ */
+export function searchIntentIds(
+  db: IntentDatabase,
+  ftsQuery: string,
+  limit: number,
+  filePath?: string | null,
+): string[] {
+  const rows = filePath
+    ? (db
+        .prepare(
+          `SELECT intent.id AS id
+             FROM intent_fts
+             JOIN intent ON intent.rowid = intent_fts.rowid
+            WHERE intent_fts MATCH ?
+              AND intent.id IN (SELECT intent_id FROM intent_line WHERE file_path = ?)
+            ORDER BY bm25(intent_fts)
+            LIMIT ?`,
+        )
+        .all(ftsQuery, filePath, limit) as Array<{ id: string }>)
+    : (db
+        .prepare(
+          `SELECT intent.id AS id
+             FROM intent_fts
+             JOIN intent ON intent.rowid = intent_fts.rowid
+            WHERE intent_fts MATCH ?
+            ORDER BY bm25(intent_fts)
+            LIMIT ?`,
+        )
+        .all(ftsQuery, limit) as Array<{ id: string }>);
+  return rows.map((r) => r.id);
+}
+
 /**
  * Amend an intent's detail. `append` adds to the existing detail (separated by
  * a blank line); otherwise it replaces. Returns the updated intent, or null if

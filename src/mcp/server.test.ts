@@ -39,9 +39,16 @@ function payload(result: CallToolResult): Record<string, unknown> {
 }
 
 describe("write-side MCP tools", () => {
-  it("advertises annotate_intent and update_intent", async () => {
+  it("advertises the write-side and read-side tools", async () => {
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["annotate_intent", "update_intent"]);
+    expect(tools.map((t) => t.name).sort()).toEqual([
+      "annotate_intent",
+      "get_file_intent",
+      "get_intent",
+      "get_session_intent",
+      "search_intent",
+      "update_intent",
+    ]);
   });
 
   it("annotate_intent captures an intent end-to-end", async () => {
@@ -95,5 +102,32 @@ describe("write-side MCP tools", () => {
     expect(result.isError).toBe(true);
     const block = result.content[0];
     expect(block && block.type === "text" && block.text).toMatch(/intent not found/);
+  });
+
+  it("get_intent and search_intent resolve through the tool surface", async () => {
+    await writeFile(path.join(repo.root, "api.ts"), "a\nretry()\nb\n");
+    await client.callTool({
+      name: "annotate_intent",
+      arguments: { file: "api.ts", line_start: 2, line_end: 2, summary: "Add retry logic" },
+    });
+
+    const atLine = payload(
+      (await client.callTool({
+        name: "get_intent",
+        arguments: { file: "api.ts", line: 2 },
+      })) as CallToolResult,
+    );
+    expect((atLine.intents as unknown[]).length).toBe(1);
+
+    const search = payload(
+      (await client.callTool({
+        name: "search_intent",
+        arguments: { query: "retry" },
+      })) as CallToolResult,
+    );
+    const hits = search.intents as Array<{ summary: string; lines: unknown[] }>;
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.summary).toBe("Add retry logic");
+    expect(hits[0]!.lines).toHaveLength(1);
   });
 });

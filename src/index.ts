@@ -39,6 +39,18 @@ export {
 } from "./capture.js";
 export { createIntentServer } from "./mcp/server.js";
 
+// Query service (read-side)
+export {
+  getIntentAtLine,
+  getFileIntent,
+  searchIntent,
+  getSessionIntent,
+  toFtsQuery,
+  type QueryContext,
+  type ResolvedIntent,
+  type ResolvedIntentLine,
+} from "./query.js";
+
 // Git anchoring
 export { runGit, GitError, type GitRunOptions } from "./git/exec.js";
 export { getRepoRoot, getGitDir, isGitRepo } from "./git/repo.js";
