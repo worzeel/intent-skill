@@ -18,6 +18,26 @@ export {
   type OpenOptions,
 } from "./db/connection.js";
 export { migrations, LATEST_SCHEMA_VERSION, type Migration } from "./db/schema.js";
+export {
+  createIntent,
+  insertIntentLine,
+  getIntent,
+  getIntentLines,
+  updateIntentDetail,
+  type NewIntent,
+  type NewIntentLine,
+} from "./db/intents.js";
+
+// Capture service (write-side) + MCP server
+export {
+  annotateIntent,
+  updateIntent,
+  type CaptureContext,
+  type AnnotateParams,
+  type AnnotateResult,
+  type UpdateParams,
+} from "./capture.js";
+export { createIntentServer } from "./mcp/server.js";
 
 // Git anchoring
 export { runGit, GitError, type GitRunOptions } from "./git/exec.js";
