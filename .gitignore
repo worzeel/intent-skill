@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.log
+
+# Per-repo intent database lives inside .git/, never committed
+.git/intent.db
+.git/intent.db-*
