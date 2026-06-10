@@ -1,8 +1,8 @@
-import type { Database } from "better-sqlite3";
+import type { DatabaseSync } from "node:sqlite";
 
 export interface Migration {
   version: number;
-  up: (db: Database) => void;
+  up: (db: DatabaseSync) => void;
 }
 
 /**

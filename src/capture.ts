@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { IntentDatabase } from "./db/connection.js";
+import { transaction, type IntentDatabase } from "./db/connection.js";
 import type { Intent } from "./types.js";
 import {
   createIntent,
@@ -68,14 +68,14 @@ export async function annotateIntent(
   );
   const sessionId = params.sessionId ?? ctx.sessionId ?? null;
 
-  const write = ctx.db.transaction((): { intentId: string; intentLineId: string } => {
-    let intentId = params.intentId ?? null;
-    if (intentId) {
-      if (!getIntent(ctx.db, intentId)) {
-        throw new Error(`intent not found: ${intentId}`);
+  const { intentId, intentLineId } = transaction(ctx.db, () => {
+    let resolvedIntentId = params.intentId ?? null;
+    if (resolvedIntentId) {
+      if (!getIntent(ctx.db, resolvedIntentId)) {
+        throw new Error(`intent not found: ${resolvedIntentId}`);
       }
     } else {
-      intentId = createIntent(ctx.db, {
+      resolvedIntentId = createIntent(ctx.db, {
         summary: params.summary,
         detail: params.detail,
         taskRef: params.taskRef,
@@ -84,17 +84,16 @@ export async function annotateIntent(
     }
 
     const line = insertIntentLine(ctx.db, {
-      intentId,
+      intentId: resolvedIntentId,
       filePath: params.file,
       blobHash,
       lineStart: params.lineStart,
       lineEnd: params.lineEnd,
       fragment,
     });
-    return { intentId, intentLineId: line.id };
+    return { intentId: resolvedIntentId, intentLineId: line.id };
   });
 
-  const { intentId, intentLineId } = write();
   return { intentId, intentLineId, blobHash, fragment };
 }
 

@@ -1,12 +1,18 @@
 import path from "node:path";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { getGitDir } from "../git/repo.js";
 import { migrations } from "./schema.js";
 
-export type IntentDatabase = Database.Database;
+/**
+ * SQLite via node's built-in `node:sqlite` (DatabaseSync) — synchronous, no
+ * native module to compile, no runtime dependency. Keeps the whole tool pure JS
+ * so it ships as a droppable skill bundle. Foreign keys are on by default
+ * (`enableForeignKeyConstraints`).
+ */
+export type IntentDatabase = DatabaseSync;
 
 export interface OpenOptions {
-  /** Open read-only. Skips migrations (a read-only handle cannot write schema). */
+  /** Open read-only. Skips WAL + migrations (a read-only handle can't write). */
   readonly?: boolean;
 }
 
@@ -23,14 +29,11 @@ export async function resolveDbPath(cwd: string): Promise<string> {
  */
 export function openIntentDb(dbPath: string, opts: OpenOptions = {}): IntentDatabase {
   const readonly = opts.readonly ?? false;
-  const db = new Database(dbPath, { readonly });
+  const db = new DatabaseSync(dbPath, { readOnly: readonly });
 
   if (!readonly) {
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
+    db.exec("PRAGMA journal_mode = WAL");
     migrate(db);
-  } else {
-    db.pragma("foreign_keys = ON");
   }
 
   return db;
@@ -50,17 +53,39 @@ export async function openIntentDbForCwd(
  * runs in its own transaction so a failure leaves the version untouched.
  */
 export function migrate(db: IntentDatabase): void {
-  const current = db.pragma("user_version", { simple: true }) as number;
+  const current = getUserVersion(db);
   const pending = migrations
     .filter((m) => m.version > current)
     .sort((a, b) => a.version - b.version);
 
   for (const m of pending) {
-    const apply = db.transaction(() => {
+    transaction(db, () => {
       m.up(db);
       // user_version can't be parameterised; version is an internal integer.
-      db.pragma(`user_version = ${m.version}`);
+      db.exec(`PRAGMA user_version = ${m.version}`);
     });
-    apply();
+  }
+}
+
+/** Current PRAGMA user_version (schema version) for the connection. */
+export function getUserVersion(db: IntentDatabase): number {
+  const row = db.prepare("PRAGMA user_version").get() as { user_version: number };
+  return row.user_version;
+}
+
+/**
+ * Run `fn` inside a transaction. node:sqlite has no `db.transaction()` helper
+ * (unlike better-sqlite3), so we drive BEGIN/COMMIT/ROLLBACK by hand. Rethrows
+ * after rolling back on failure.
+ */
+export function transaction<T>(db: IntentDatabase, fn: () => T): T {
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
   }
 }

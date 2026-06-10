@@ -14,6 +14,8 @@ export {
   openIntentDbForCwd,
   resolveDbPath,
   migrate,
+  transaction,
+  getUserVersion,
   type IntentDatabase,
   type OpenOptions,
 } from "./db/connection.js";

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { SQLOutputValue } from "node:sqlite";
 import type { IntentDatabase } from "./connection.js";
 import type { Intent, IntentLine } from "../types.js";
 
@@ -8,7 +9,10 @@ import type { Intent, IntentLine } from "../types.js";
  * just touch the base tables.
  */
 
+// Index signature lets these double as node:sqlite bind params and as the cast
+// target for its `Record<string, SQLOutputValue>` query results.
 interface IntentRow {
+  [column: string]: SQLOutputValue;
   id: string;
   session_id: string | null;
   summary: string;
@@ -18,6 +22,7 @@ interface IntentRow {
 }
 
 interface IntentLineRow {
+  [column: string]: SQLOutputValue;
   id: string;
   intent_id: string;
   file_path: string;

@@ -3,7 +3,13 @@ import { realpath } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTempRepo, type TempRepo } from "../test-helpers.js";
 import { LATEST_SCHEMA_VERSION } from "./schema.js";
-import { migrate, openIntentDb, openIntentDbForCwd, resolveDbPath } from "./connection.js";
+import {
+  getUserVersion,
+  migrate,
+  openIntentDb,
+  openIntentDbForCwd,
+  resolveDbPath,
+} from "./connection.js";
 
 let repo: TempRepo;
 
@@ -30,7 +36,7 @@ describe("schema + migrations", () => {
     expect(names).toContain("intent");
     expect(names).toContain("intent_line");
     expect(names).toContain("intent_fts");
-    expect(db.pragma("user_version", { simple: true })).toBe(LATEST_SCHEMA_VERSION);
+    expect(getUserVersion(db)).toBe(LATEST_SCHEMA_VERSION);
 
     db.close();
   });
@@ -38,7 +44,7 @@ describe("schema + migrations", () => {
   it("is idempotent — re-running migrate applies nothing new", () => {
     const db = openIntentDb(":memory:");
     expect(() => migrate(db)).not.toThrow();
-    expect(db.pragma("user_version", { simple: true })).toBe(LATEST_SCHEMA_VERSION);
+    expect(getUserVersion(db)).toBe(LATEST_SCHEMA_VERSION);
     db.close();
   });
 
@@ -93,7 +99,7 @@ describe("repo-scoped open", () => {
   it("opens and migrates a real on-disk db for the repo", async () => {
     const db = await openIntentDbForCwd(repo.root);
     expect(tableNames(db)).toContain("intent");
-    expect(db.pragma("user_version", { simple: true })).toBe(LATEST_SCHEMA_VERSION);
+    expect(getUserVersion(db)).toBe(LATEST_SCHEMA_VERSION);
     db.close();
   });
 });

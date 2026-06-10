@@ -142,13 +142,15 @@ Hook nudges name CLI commands; bin `mcp-intent-hook` → `intent-hook`; example 
 `.claude/skills/intent/SKILL.md` — `/intent`, CLI surface, capture convention, heredoc capture pattern.
 *(Outstanding: PATH allow-list entry in `settings.local.json` was classifier-denied; needs user ok.)*
 
-### Phase 4 — DB driver swap (`better-sqlite3` → `node:sqlite`) **[NEW]**
-- [ ] Rewrite `src/db/connection.ts`: `DatabaseSync`, manual `BEGIN/COMMIT/ROLLBACK`
-      (no `.transaction()`), `PRAGMA user_version` via `exec`/`prepare`.
-- [ ] Adapt `src/db/intents.ts` named params to node:sqlite binding (`@name` object form).
-- [ ] Adapt `src/capture.ts` transaction usage (it uses `db.transaction(...)`).
-- [ ] Verify FTS5 triggers + bm25 search still pass the existing suite.
-- [ ] Drop `better-sqlite3` + `@types/better-sqlite3` from `package.json`.
+### Phase 4 — DB driver swap (`better-sqlite3` → `node:sqlite`) ✅ DONE
+- [x] `connection.ts`: `DatabaseSync`, `transaction()` helper (manual BEGIN/COMMIT/ROLLBACK),
+      `getUserVersion()` via `PRAGMA`. FK on by default.
+- [x] `intents.ts`: row interfaces gained a `[column: string]: SQLOutputValue` index signature so
+      they double as bind params + result cast target. Named-param `.run(row)` works unchanged.
+- [x] `capture.ts`: switched to the `transaction()` helper.
+- [x] All 74 tests pass (FTS5 triggers + bm25 + cascade intact). `better-sqlite3` removed.
+- [x] `npm test` runs under `NODE_OPTIONS=--experimental-sqlite --no-warnings`.
+- Note: on node 22.18 `node:sqlite` works *without* the flag (warns only); shim keeps `--no-warnings`.
 
 ### Phase 5 — Remove MCP (was 4)
 - [ ] Delete `src/mcp/` (server, stdio, tests). Drop `mcp-intent-server` bin + `@modelcontextprotocol/sdk` + `zod`.
