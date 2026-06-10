@@ -47,6 +47,6 @@ async function readInput(): Promise<HookInput> {
 
 main().catch((error) => {
   // Never break the session — log to stderr and exit clean.
-  console.error("mcp-intent-hook:", error instanceof Error ? error.message : error);
+  console.error("intent-hook:", error instanceof Error ? error.message : error);
   process.exit(0);
 });

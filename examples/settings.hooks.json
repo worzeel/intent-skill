@@ -2,19 +2,19 @@
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [{ "type": "command", "command": "mcp-intent-hook" }]
+        "hooks": [{ "type": "command", "command": "intent-hook" }]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "mcp-intent-hook" }]
+        "hooks": [{ "type": "command", "command": "intent-hook" }]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "mcp-intent-hook" }]
+        "hooks": [{ "type": "command", "command": "intent-hook" }]
       }
     ]
   }

@@ -5,10 +5,12 @@ import { getRecentIntents, getStats } from "../db/intents.js";
 import { getFileIntent, type QueryContext } from "../query.js";
 
 /**
- * Claude Code hook logic — the deterministic harness glue around the MCP tools.
+ * Claude Code hook logic — the deterministic harness glue around the `intent`
+ * CLI. The hooks carry the exact CLI command in their injected context so the
+ * capture/query loop needs no MCP server process.
  *
  *  - SessionStart: inject a short repo provenance summary so Claude knows intent
- *    history exists and to use the tools.
+ *    history exists and which commands to run.
  *  - PreToolUse (edits): inject existing provenance for the file about to be
  *    touched, so Claude doesn't contradict or re-solve prior decisions.
  *  - PostToolUse (edits): a gentle nudge to capture intent for the change.
@@ -85,7 +87,7 @@ export function buildSessionStartContext(ctx: HookContext): string | null {
     `mcp-intent: ${stats.intents} intent(s) recorded across ${stats.files} file(s).`,
     "Most recent:",
     ...bullets,
-    "Before editing a file, call get_file_intent to see prior decisions; after a significant change, call annotate_intent.",
+    "Before editing a file, run `intent file <path>` to see prior decisions; after a significant change, run `intent annotate` (JSON payload on stdin).",
   ].join("\n");
 }
 
@@ -114,7 +116,9 @@ export async function buildPreEditContext(
 export function buildPostEditReminder(file: string): string {
   return (
     `Edited ${file}. If this was a significant change (new logic, a workaround, ` +
-    `an architectural decision), call annotate_intent with a summary and the why.`
+    `an architectural decision), capture why: pipe a JSON payload to ` +
+    "`intent annotate --json -` — " +
+    `{"file":"${file}","line_start":N,"line_end":N,"summary":"…","detail":"…"}.`
   );
 }
 

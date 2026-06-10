@@ -106,7 +106,7 @@ describe("PostToolUse", () => {
       tool_name: "Write",
       tool_input: { file_path: "src/new.ts" },
     });
-    expect(context(out)).toContain("call annotate_intent");
+    expect(context(out)).toContain("intent annotate --json -");
     expect(context(out)).toContain("src/new.ts");
   });
 });

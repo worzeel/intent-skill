@@ -3,7 +3,7 @@
 Two moving parts wire `mcp-intent` into Claude Code:
 
 1. **The MCP server** (`mcp-intent-server`) exposes the capture/query tools.
-2. **The hook helper** (`mcp-intent-hook`) injects provenance into context automatically.
+2. **The hook helper** (`intent-hook`) injects provenance into context automatically.
 
 Both ship as `bin` entries — `npm install -g mcp-intent` (or reference the built
 paths directly during local dev, e.g. `node /abs/path/dist/mcp/stdio.js`).
@@ -36,15 +36,15 @@ Claude Code `settings.json` (project `.claude/settings.json` or user-level):
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "mcp-intent-hook" }] }
+      { "hooks": [{ "type": "command", "command": "intent-hook" }] }
     ],
     "PreToolUse": [
       { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "mcp-intent-hook" }] }
+        "hooks": [{ "type": "command", "command": "intent-hook" }] }
     ],
     "PostToolUse": [
       { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "mcp-intent-hook" }] }
+        "hooks": [{ "type": "command", "command": "intent-hook" }] }
     ]
   }
 }
