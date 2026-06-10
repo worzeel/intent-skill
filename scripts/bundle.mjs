@@ -52,7 +52,7 @@ rmSync(path.join(root, "bundle"), { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 cpSync(dist, path.join(out, "dist"), { recursive: true });
-copyFileSync(path.join(root, ".claude", "skills", "intent", "SKILL.md"), path.join(out, "SKILL.md"));
+copyFileSync(path.join(root, "skill", "SKILL.md"), path.join(out, "SKILL.md"));
 copyFileSync(path.join(root, "scripts", "install.mjs"), path.join(out, "install.mjs"));
 writeFileSync(path.join(out, "README.md"), README);
 

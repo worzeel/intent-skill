@@ -13,7 +13,8 @@ AI code provenance tracking for Claude Code. Captures *why* code was written, an
 - `src/cli/` — `parse` (arg parser) + `format` (human/`--json`) + `commands` + `main` (`bin: intent`).
 - `src/hooks/` — `handler` (Claude Code hook logic) + `cli` (`bin: intent-hook`).
 - `src/index.ts` — public API barrel. `src/types.ts` — domain types.
-- `.claude/skills/intent/SKILL.md` — `/intent` skill. `examples/` + [docs/claude-code-integration.md](docs/claude-code-integration.md) — hooks config.
+- `skill/SKILL.md` — `/intent` skill source (bundled, not active in this repo). `examples/` + [docs/claude-code-integration.md](docs/claude-code-integration.md) — hooks config.
+- `scripts/` — `bundle.mjs` (assemble droppable bundle) + `install.mjs` (hooks + PATH shims).
 
 ## Commands
 - `npm test` — vitest (runs with `--experimental-sqlite`). `npm run typecheck`. `npm run build` → `dist/`.
@@ -35,7 +36,10 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
 - **Phase 6 done**: renamed `mcp-intent`→`intent` (`INTENT_SESSION_ID` primary, old as fallback).
 - **Phase 7 done**: droppable skill bundle — `npm run bundle` → `bundle/intent/` (SKILL.md + dist + `install.mjs`).
   `install.mjs` wires hooks + PATH shims, idempotent, `--dry-run`/`--project`/`--bin-dir`/`--settings`.
-- **Next**: Phase 8 post-commit backfill (`commit_hash` where NULL, matched by `blob_hash`).
+- **Phase 8 done**: post-commit backfill — `intent backfill` + `intent install-commit-hook`; `src/backfill.ts`
+  + `src/git/commit.ts`. Stamps `commit_hash` (NULL until committed) from HEAD's blobs.
+- **Pivot complete.** This repo is now the *source*: it builds the bundle but doesn't run intent on itself
+  (no hooks; skill source lives in `skill/`).
 
 Hooks (`intent-hook`): SessionStart → repo provenance summary; PreToolUse(edits) → existing intent
 for the target file; PostToolUse(edits) → nudge to `intent annotate`. Context injected via

@@ -56,8 +56,16 @@ export {
   getAllIntents,
   getRecentIntents,
   getStats,
+  backfillCommitHash,
   type IntentStats,
 } from "./db/intents.js";
+
+// Post-commit backfill
+export {
+  backfillHeadCommit,
+  type BackfillContext,
+  type BackfillResult,
+} from "./backfill.js";
 
 // CLI
 export {
@@ -83,6 +91,7 @@ export {
 // Git anchoring
 export { runGit, GitError, type GitRunOptions } from "./git/exec.js";
 export { getRepoRoot, getGitDir, isGitRepo } from "./git/repo.js";
+export { getHeadCommit, getCommitBlobs } from "./git/commit.js";
 export {
   hashFile,
   hashContent,

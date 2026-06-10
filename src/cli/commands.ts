@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import path from "node:path";
 import { annotateIntent, updateIntent, type CaptureContext } from "../capture.js";
 import {
   getAllResolvedIntents,
@@ -8,6 +10,8 @@ import {
   type ResolvedIntent,
 } from "../query.js";
 import { getStats } from "../db/intents.js";
+import { backfillHeadCommit } from "../backfill.js";
+import { getGitDir } from "../git/repo.js";
 import type { ParsedArgs } from "./parse.js";
 import {
   formatIntents,
@@ -58,6 +62,10 @@ export async function runCommand(
       return stats(ctx, json);
     case "export":
       return exportAll(ctx);
+    case "backfill":
+      return backfill(ctx, json);
+    case "install-commit-hook":
+      return installCommitHook(ctx);
     case "help":
     case undefined:
       return helpText();
@@ -160,6 +168,37 @@ async function exportAll(ctx: CaptureContext): Promise<string> {
   return resolved.map((r) => JSON.stringify(serializeIntent(r))).join("\n");
 }
 
+async function backfill(ctx: CaptureContext, json: boolean): Promise<string> {
+  const { commit, updated } = await backfillHeadCommit(ctx);
+  return json
+    ? JSON.stringify({ commit, updated })
+    : `backfilled ${updated} record(s) → ${commit.slice(0, 8)}`;
+}
+
+/** Install a fail-safe post-commit git hook that runs `intent backfill`. */
+async function installCommitHook(ctx: CaptureContext): Promise<string> {
+  const gitDir = await getGitDir(ctx.repoRoot);
+  const hookPath = path.join(gitDir, "hooks", "post-commit");
+  const script =
+    "#!/bin/sh\n" +
+    "# intent: stamp commit_hash onto captured intents (never blocks a commit)\n" +
+    "intent backfill >/dev/null 2>&1 || true\n";
+
+  if (existsSync(hookPath)) {
+    if (readFileSync(hookPath, "utf8").includes("intent backfill")) {
+      return `post-commit hook already installed → ${hookPath}`;
+    }
+    throw new UsageError(
+      `a post-commit hook already exists at ${hookPath}; add 'intent backfill' to it manually`,
+    );
+  }
+
+  mkdirSync(path.dirname(hookPath), { recursive: true });
+  writeFileSync(hookPath, script);
+  chmodSync(hookPath, 0o755);
+  return `installed post-commit hook → ${hookPath}`;
+}
+
 function render(resolved: ResolvedIntent[], json: boolean): string {
   return json ? JSON.stringify(serializeIntents(resolved)) : formatIntents(resolved);
 }
@@ -234,6 +273,8 @@ export function helpText(): string {
     "  intent export                        ndjson of every intent",
     "  intent annotate                      capture (JSON payload on stdin)",
     "  intent update                        amend detail (JSON payload on stdin)",
+    "  intent backfill                      stamp commit_hash from the HEAD commit",
+    "  intent install-commit-hook           add a post-commit hook that backfills",
     "",
     "Flags:",
     "  --json     machine-readable output (read commands)",

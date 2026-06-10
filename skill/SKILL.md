@@ -54,3 +54,12 @@ Optional: `detail`, `task_ref`, `intent_id`, `session_id`.
 
 Run `intent file <path>` first to see prior decisions (the PreToolUse hook also injects this
 automatically). Don't contradict or re-solve what's already there.
+
+## Commit provenance (optional)
+
+Intents are anchored to the git blob hash at capture time, so `commit_hash` is NULL until the
+content is committed. To stamp it:
+
+- `intent backfill` — stamps `commit_hash` on pending rows whose blob is in the HEAD commit.
+- `intent install-commit-hook` — installs a fail-safe `post-commit` git hook that runs
+  `intent backfill` automatically after every commit (never blocks a commit).

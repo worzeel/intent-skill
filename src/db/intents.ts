@@ -205,6 +205,27 @@ export function searchIntentIds(
 }
 
 /**
+ * Stamp `commitHash` onto pending `intent_line` rows (commit_hash IS NULL) whose
+ * blob now lives in that commit. Matched by blob hash — content is the anchor.
+ * Returns the number of rows updated.
+ */
+export function backfillCommitHash(
+  db: IntentDatabase,
+  commitHash: string,
+  blobHashes: readonly string[],
+): number {
+  if (blobHashes.length === 0) return 0;
+  const stmt = db.prepare(
+    "UPDATE intent_line SET commit_hash = ? WHERE commit_hash IS NULL AND blob_hash = ?",
+  );
+  let updated = 0;
+  for (const blob of blobHashes) {
+    updated += Number(stmt.run(commitHash, blob).changes);
+  }
+  return updated;
+}
+
+/**
  * Amend an intent's detail. `append` adds to the existing detail (separated by
  * a blank line); otherwise it replaces. Returns the updated intent, or null if
  * no intent has that id.

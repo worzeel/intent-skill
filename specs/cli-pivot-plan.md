@@ -173,8 +173,16 @@ Hook nudges name CLI commands; bin `mcp-intent-hook` → `intent-hook`; example 
 - Note: hook command is the absolute shim path, so hooks work without PATH; only the human/Claude
   `intent` invocation needs the shim dir on PATH (installer warns if it isn't).
 
-### Phase 8 — Post-commit hook (was M6)
-- [ ] `intent-hook` gains a post-commit mode backfilling `commit_hash` where NULL, matched by `blob_hash`.
+### Phase 8 — Post-commit backfill (was M6) ✅ DONE
+- [x] `src/git/commit.ts` (`getHeadCommit`, `getCommitBlobs` via `diff-tree --root`), `backfillCommitHash`
+      (db), `backfillHeadCommit` (service). Matched by blob hash; only stamps rows where commit_hash IS NULL.
+- [x] CLI: `intent backfill` + `intent install-commit-hook` (writes a fail-safe `.git/hooks/post-commit`).
+- [x] 3 backfill tests (stamp / idempotent / blob-not-in-commit). Dogfooded live in a temp repo.
+
+### Repo tidy (source repo no longer self-uses the tool)
+- [x] Relocated skill source `.claude/skills/intent/SKILL.md` → `skill/SKILL.md`; `bundle.mjs` follows.
+- [x] Removed `.claude/settings.json` (the hooks) and the throwaway `.git/intent.db`. This repo builds
+      the bundle but doesn't run intent on itself.
 
 ### Phase 9 — Export ✅ effectively done
 `intent export` (ndjson) landed in Phase 1; revisit only if cross-repo ingest needs a different shape.
