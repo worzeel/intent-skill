@@ -84,7 +84,7 @@ export function buildSessionStartContext(ctx: HookContext): string | null {
   );
 
   return [
-    `mcp-intent: ${stats.intents} intent(s) recorded across ${stats.files} file(s).`,
+    `intent: ${stats.intents} intent(s) recorded across ${stats.files} file(s).`,
     "Most recent:",
     ...bullets,
     "Before editing a file, run `intent file <path>` to see prior decisions; after a significant change, run `intent annotate` (JSON payload on stdin).",

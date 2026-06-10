@@ -104,7 +104,7 @@ Write payload contract (`annotate`):
 { "file": "src/x.ts", "line_start": 10, "line_end": 24,
   "summary": "…", "detail": "…", "task_ref": "GH-142",
   "intent_id": "…optional, attach multi-file task…",
-  "session_id": "…from MCP_INTENT_SESSION_ID…" }
+  "session_id": "…from INTENT_SESSION_ID…" }
 ```
 
 ## Distribution — the droppable skill bundle
@@ -158,9 +158,10 @@ Hook nudges name CLI commands; bin `mcp-intent-hook` → `intent-hook`; example 
 - [x] Removed `createIntentServer` from the barrel; rewrote docs (CLI + hooks + skill); updated CLAUDE.md.
 - [x] **`dependencies: {}`** — zero runtime deps. 69 tests pass, typecheck clean.
 
-### Phase 6 — Rename `mcp-intent` → `intent` (was 5)
-- [ ] `package.json` name. CLAUDE.md, spec, docs, README refs.
-- [ ] `MCP_INTENT_SESSION_ID` → `INTENT_SESSION_ID` (keep old as fallback; CLI already reads both).
+### Phase 6 — Rename `mcp-intent` → `intent` (was 5) ✅ DONE
+- [x] `package.json` name → `intent`. CLAUDE.md title, comments, hook output prefix, temp-dir prefix.
+- [x] `INTENT_SESSION_ID` now primary, `MCP_INTENT_SESSION_ID` kept as legacy fallback.
+- Left `specs/mcp-intent-spec.md` untouched (founding historical spec). Repo *directory* rename is the user's.
 
 ### Phase 7 — Bundle + `install.mjs` (distribution) **[NEW — replaces npm-link]**
 - [ ] Build step assembles the `intent/` skill bundle (SKILL.md + dist + bin shims + install.mjs).

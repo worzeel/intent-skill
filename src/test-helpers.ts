@@ -10,7 +10,7 @@ export interface TempRepo {
 
 /** Create an isolated, initialised git repo in a temp dir for tests. */
 export async function makeTempRepo(): Promise<TempRepo> {
-  const root = await mkdtemp(path.join(tmpdir(), "mcp-intent-"));
+  const root = await mkdtemp(path.join(tmpdir(), "intent-"));
   await runGit(["init", "-q", "-b", "main"], { cwd: root });
   await runGit(["config", "user.email", "test@example.com"], { cwd: root });
   await runGit(["config", "user.name", "Test"], { cwd: root });

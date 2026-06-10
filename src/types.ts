@@ -1,5 +1,5 @@
 /**
- * Core domain types for mcp-intent.
+ * Core domain types for intent.
  *
  * These mirror the SQLite schema (see src/db/schema.ts) but use camelCase and
  * explicit nullability. Row <-> domain mapping happens at the db boundary.

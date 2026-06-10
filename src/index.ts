@@ -1,5 +1,5 @@
 /**
- * mcp-intent public API.
+ * intent public API.
  *
  * Milestone 1 surface: domain types, the per-repo SQLite database (schema +
  * migrations), and git blob-hash resolution. Write/read MCP tools and the CLI

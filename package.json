@@ -1,5 +1,5 @@
 {
-  "name": "mcp-intent",
+  "name": "intent",
   "version": "0.1.0",
   "description": "AI code provenance tracking for Claude Code — captures why code was written, anchored to git blob hashes.",
   "type": "module",

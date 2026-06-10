@@ -1,4 +1,4 @@
-# mcp-intent
+# intent
 
 AI code provenance tracking for Claude Code. Captures *why* code was written, anchored to git blob hashes (stable across line drift), in a per-repo SQLite db at `.git/intent.db`.
 
@@ -31,8 +31,9 @@ for coverage). Search uses FTS5 bm25; free-text sanitised via `toFtsQuery`.
 CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
 - **Phase 1–3 done**: `intent` CLI; hook nudges name CLI commands; `/intent` skill.
 - **Phase 4 done**: swapped `better-sqlite3` → `node:sqlite` (zero runtime deps).
-- **Phase 5 done**: removed the MCP server (`src/mcp/`, SDK, zod, `.mcp.json`).
-- **Next**: Phase 6 rename `mcp-intent`→`intent`; Phase 7 bundle + `install.mjs`; Phase 8 post-commit backfill.
+- **Phase 5 done**: removed the MCP server (`src/mcp/`, SDK, zod, `.mcp.json`). `dependencies: {}`.
+- **Phase 6 done**: renamed `mcp-intent`→`intent` (`INTENT_SESSION_ID` primary, old as fallback).
+- **Next**: Phase 7 bundle + `install.mjs`; Phase 8 post-commit backfill.
 
 Hooks (`intent-hook`): SessionStart → repo provenance summary; PreToolUse(edits) → existing intent
 for the target file; PostToolUse(edits) → nudge to `intent annotate`. Context injected via

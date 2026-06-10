@@ -6,8 +6,8 @@ import { runCommand, helpText, UsageError } from "./commands.js";
 
 /**
  * Entry point for the `intent` CLI — the single human + Claude interface to the
- * per-repo intent database. Runs from inside a git repo; `MCP_INTENT_SESSION_ID`
- * (or `INTENT_SESSION_ID`) tags captured intents with the session.
+ * per-repo intent database. Runs from inside a git repo; `INTENT_SESSION_ID`
+ * (or legacy `MCP_INTENT_SESSION_ID`) tags captured intents with the session.
  *
  * Exit codes: 0 ok, 1 runtime error, 2 usage error.
  */
@@ -31,7 +31,7 @@ async function main(): Promise<number> {
 
   const repoRoot = await getRepoRoot(cwd);
   const sessionId =
-    process.env.MCP_INTENT_SESSION_ID ?? process.env.INTENT_SESSION_ID ?? null;
+    process.env.INTENT_SESSION_ID ?? process.env.MCP_INTENT_SESSION_ID ?? null;
   const db = await openIntentDbForCwd(cwd);
 
   try {
