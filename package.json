@@ -21,6 +21,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "bundle": "npm run build && node scripts/bundle.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS=\"--experimental-sqlite --no-warnings\" vitest run",
     "test:watch": "NODE_OPTIONS=\"--experimental-sqlite --no-warnings\" vitest"

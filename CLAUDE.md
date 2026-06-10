@@ -33,7 +33,9 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
 - **Phase 4 done**: swapped `better-sqlite3` → `node:sqlite` (zero runtime deps).
 - **Phase 5 done**: removed the MCP server (`src/mcp/`, SDK, zod, `.mcp.json`). `dependencies: {}`.
 - **Phase 6 done**: renamed `mcp-intent`→`intent` (`INTENT_SESSION_ID` primary, old as fallback).
-- **Next**: Phase 7 bundle + `install.mjs`; Phase 8 post-commit backfill.
+- **Phase 7 done**: droppable skill bundle — `npm run bundle` → `bundle/intent/` (SKILL.md + dist + `install.mjs`).
+  `install.mjs` wires hooks + PATH shims, idempotent, `--dry-run`/`--project`/`--bin-dir`/`--settings`.
+- **Next**: Phase 8 post-commit backfill (`commit_hash` where NULL, matched by `blob_hash`).
 
 Hooks (`intent-hook`): SessionStart → repo provenance summary; PreToolUse(edits) → existing intent
 for the target file; PostToolUse(edits) → nudge to `intent annotate`. Context injected via

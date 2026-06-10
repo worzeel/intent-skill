@@ -163,10 +163,15 @@ Hook nudges name CLI commands; bin `mcp-intent-hook` → `intent-hook`; example 
 - [x] `INTENT_SESSION_ID` now primary, `MCP_INTENT_SESSION_ID` kept as legacy fallback.
 - Left `specs/mcp-intent-spec.md` untouched (founding historical spec). Repo *directory* rename is the user's.
 
-### Phase 7 — Bundle + `install.mjs` (distribution) **[NEW — replaces npm-link]**
-- [ ] Build step assembles the `intent/` skill bundle (SKILL.md + dist + bin shims + install.mjs).
-- [ ] `install.mjs`: settings.json hook merge, PATH shims, idempotent, `--dry-run`.
-- [ ] Dogfood: install into this repo's `.claude` and a throwaway repo.
+### Phase 7 — Bundle + `install.mjs` (distribution) ✅ DONE
+- [x] `scripts/bundle.mjs` (`npm run bundle`) assembles `bundle/intent/` = SKILL.md + dist + install.mjs + README.
+- [x] `scripts/install.mjs`: idempotent settings.json hook merge (preserves foreign hooks/keys, self-heals
+      on path change), PATH shims with `--experimental-sqlite --no-warnings` baked in, `--dry-run`,
+      `--project`/`--settings`/`--bin-dir` flags. Default target `~/.claude` (all repos).
+- [x] `mergeHooks`/`shimContent` unit-tested (7 tests); vitest include extended to `scripts/**/*.test.mjs`.
+- [x] Dogfooded: bundle → install to temp → generated shim runs clean → idempotent re-run verified.
+- Note: hook command is the absolute shim path, so hooks work without PATH; only the human/Claude
+  `intent` invocation needs the shim dir on PATH (installer warns if it isn't).
 
 ### Phase 8 — Post-commit hook (was M6)
 - [ ] `intent-hook` gains a post-commit mode backfilling `commit_hash` where NULL, matched by `blob_hash`.

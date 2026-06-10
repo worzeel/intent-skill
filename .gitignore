@@ -1,5 +1,6 @@
 node_modules/
 dist/
+bundle/
 *.log
 
 # Per-repo intent database lives inside .git/, never committed
