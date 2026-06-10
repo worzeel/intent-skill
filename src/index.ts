@@ -45,12 +45,27 @@ export {
   getFileIntent,
   searchIntent,
   getSessionIntent,
+  getAllResolvedIntents,
   toFtsQuery,
   type QueryContext,
   type ResolvedIntent,
   type ResolvedIntentLine,
 } from "./query.js";
-export { getRecentIntents, getStats, type IntentStats } from "./db/intents.js";
+export {
+  getAllIntents,
+  getRecentIntents,
+  getStats,
+  type IntentStats,
+} from "./db/intents.js";
+
+// CLI
+export {
+  runCommand,
+  helpText,
+  UsageError,
+  type CommandDeps,
+} from "./cli/commands.js";
+export { parseArgs, type ParsedArgs } from "./cli/parse.js";
 
 // Claude Code hook integration
 export {

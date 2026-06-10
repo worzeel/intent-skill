@@ -7,6 +7,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "intent": "dist/cli/main.js",
     "mcp-intent-server": "dist/mcp/stdio.js",
     "mcp-intent-hook": "dist/hooks/cli.js"
   },

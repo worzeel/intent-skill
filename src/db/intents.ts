@@ -133,6 +133,14 @@ export function getIntentsBySession(db: IntentDatabase, sessionId: string): Inte
   return rows.map(toIntent);
 }
 
+/** Every intent, oldest first. Used by `intent export`. */
+export function getAllIntents(db: IntentDatabase): Intent[] {
+  const rows = db
+    .prepare("SELECT * FROM intent ORDER BY created_at, rowid")
+    .all() as IntentRow[];
+  return rows.map(toIntent);
+}
+
 export function getRecentIntents(db: IntentDatabase, limit: number): Intent[] {
   const rows = db
     .prepare("SELECT * FROM intent ORDER BY created_at DESC, rowid DESC LIMIT ?")

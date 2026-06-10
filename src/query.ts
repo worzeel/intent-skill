@@ -1,6 +1,7 @@
 import type { IntentDatabase } from "./db/connection.js";
 import type { Intent, IntentLine } from "./types.js";
 import {
+  getAllIntents,
   getIntent,
   getIntentLines,
   getIntentLinesByFile,
@@ -153,6 +154,17 @@ export async function searchIntent(
   const limit = options.limit ?? 20;
   const ids = searchIntentIds(ctx.db, ftsQuery, limit, options.file ?? null);
   const resolved = await Promise.all(ids.map((id) => loadResolvedIntent(ctx, id)));
+  return resolved.filter((r): r is ResolvedIntent => r !== null);
+}
+
+/** Every intent in the repo, fully resolved — used by `intent export`. */
+export async function getAllResolvedIntents(
+  ctx: QueryContext,
+): Promise<ResolvedIntent[]> {
+  const intents = getAllIntents(ctx.db);
+  const resolved = await Promise.all(
+    intents.map((i) => loadResolvedIntent(ctx, i.id)),
+  );
   return resolved.filter((r): r is ResolvedIntent => r !== null);
 }
 

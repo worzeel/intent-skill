@@ -1,0 +1,245 @@
+import { annotateIntent, updateIntent, type CaptureContext } from "../capture.js";
+import {
+  getAllResolvedIntents,
+  getFileIntent,
+  getIntentAtLine,
+  getSessionIntent,
+  searchIntent,
+  type ResolvedIntent,
+} from "../query.js";
+import { getStats } from "../db/intents.js";
+import type { ParsedArgs } from "./parse.js";
+import {
+  formatIntents,
+  formatStats,
+  serializeIntent,
+  serializeIntents,
+} from "./format.js";
+
+/**
+ * CLI command handlers over the same capture/query services the hooks use.
+ * Each returns the string to print; main.ts owns stdin/stdout/exit codes.
+ *
+ * Write commands (`annotate`, `update`) take their payload as JSON on stdin so
+ * multiline detail / quotes never hit shell escaping. Read commands honour
+ * `--json` for machine output and default to terse human text.
+ */
+
+/** A user error (bad args/payload) — main exits 2 and prints usage, not a stack. */
+export class UsageError extends Error {}
+
+export interface CommandDeps {
+  /** Reads the full JSON payload for write commands. */
+  readStdin: () => Promise<string>;
+}
+
+export async function runCommand(
+  ctx: CaptureContext,
+  parsed: ParsedArgs,
+  deps: CommandDeps,
+): Promise<string> {
+  const json = parsed.flags.json === true;
+
+  switch (parsed.command) {
+    case "annotate":
+      return annotate(ctx, deps, json);
+    case "update":
+      return update(ctx, deps, json);
+    case "show":
+      return show(ctx, parsed, json);
+    case "file":
+    case "log":
+      return fileLog(ctx, parsed, json);
+    case "search":
+      return search(ctx, parsed, json);
+    case "session":
+      return session(ctx, parsed, json);
+    case "stats":
+      return stats(ctx, json);
+    case "export":
+      return exportAll(ctx);
+    case "help":
+    case undefined:
+      return helpText();
+    default:
+      throw new UsageError(`unknown command: ${parsed.command}`);
+  }
+}
+
+async function annotate(
+  ctx: CaptureContext,
+  deps: CommandDeps,
+  json: boolean,
+): Promise<string> {
+  const payload = await readPayload(deps);
+  const result = await annotateIntent(ctx, {
+    file: reqStr(payload, "file"),
+    lineStart: reqInt(payload, "line_start"),
+    lineEnd: reqInt(payload, "line_end"),
+    summary: reqStr(payload, "summary"),
+    detail: optStr(payload, "detail"),
+    taskRef: optStr(payload, "task_ref"),
+    intentId: optStr(payload, "intent_id"),
+    sessionId: optStr(payload, "session_id"),
+  });
+  return json
+    ? JSON.stringify({
+        intent_id: result.intentId,
+        intent_line_id: result.intentLineId,
+        blob_hash: result.blobHash,
+      })
+    : `annotated ${result.intentId} (${result.blobHash.slice(0, 8)})`;
+}
+
+async function update(
+  ctx: CaptureContext,
+  deps: CommandDeps,
+  json: boolean,
+): Promise<string> {
+  const payload = await readPayload(deps);
+  const intent = updateIntent(ctx, {
+    intentId: reqStr(payload, "intent_id"),
+    detail: reqStr(payload, "detail"),
+    append: typeof payload.append === "boolean" ? payload.append : undefined,
+  });
+  return json
+    ? JSON.stringify({ intent_id: intent.id, detail: intent.detail })
+    : `updated ${intent.id}`;
+}
+
+async function show(
+  ctx: CaptureContext,
+  parsed: ParsedArgs,
+  json: boolean,
+): Promise<string> {
+  const target = parsed.positionals[0];
+  if (!target) throw new UsageError("usage: intent show <file>:<line>");
+  const { file, line } = parseTarget(target);
+  return render(await getIntentAtLine(ctx, file, line), json);
+}
+
+async function fileLog(
+  ctx: CaptureContext,
+  parsed: ParsedArgs,
+  json: boolean,
+): Promise<string> {
+  const file = parsed.positionals[0];
+  if (!file) throw new UsageError("usage: intent file <path>");
+  return render(await getFileIntent(ctx, file), json);
+}
+
+async function search(
+  ctx: CaptureContext,
+  parsed: ParsedArgs,
+  json: boolean,
+): Promise<string> {
+  const query = parsed.positionals.join(" ").trim();
+  if (!query) throw new UsageError("usage: intent search <query> [--file f] [--limit n]");
+  const file = typeof parsed.flags.file === "string" ? parsed.flags.file : undefined;
+  const limit = optLimit(parsed.flags.limit);
+  return render(await searchIntent(ctx, query, { file, limit }), json);
+}
+
+async function session(
+  ctx: CaptureContext,
+  parsed: ParsedArgs,
+  json: boolean,
+): Promise<string> {
+  const id = parsed.positionals[0];
+  if (!id) throw new UsageError("usage: intent session <session-id>");
+  return render(await getSessionIntent(ctx, id), json);
+}
+
+function stats(ctx: CaptureContext, json: boolean): string {
+  const s = getStats(ctx.db);
+  return json ? JSON.stringify(s) : formatStats(s);
+}
+
+async function exportAll(ctx: CaptureContext): Promise<string> {
+  const resolved = await getAllResolvedIntents(ctx);
+  return resolved.map((r) => JSON.stringify(serializeIntent(r))).join("\n");
+}
+
+function render(resolved: ResolvedIntent[], json: boolean): string {
+  return json ? JSON.stringify(serializeIntents(resolved)) : formatIntents(resolved);
+}
+
+// --- payload + arg helpers ---------------------------------------------------
+
+async function readPayload(deps: CommandDeps): Promise<Record<string, unknown>> {
+  const raw = (await deps.readStdin()).trim();
+  if (!raw) throw new UsageError("expected a JSON payload on stdin");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new UsageError("invalid JSON payload on stdin");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new UsageError("JSON payload must be an object");
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function parseTarget(target: string): { file: string; line: number } {
+  const idx = target.lastIndexOf(":");
+  if (idx === -1) throw new UsageError("expected <file>:<line>");
+  const file = target.slice(0, idx);
+  const line = Number(target.slice(idx + 1));
+  if (!file || !Number.isInteger(line) || line < 1) {
+    throw new UsageError("expected <file>:<line> with a positive integer line");
+  }
+  return { file, line };
+}
+
+function reqStr(payload: Record<string, unknown>, key: string): string {
+  const v = payload[key];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new UsageError(`missing required string field: ${key}`);
+  }
+  return v;
+}
+
+function reqInt(payload: Record<string, unknown>, key: string): number {
+  const v = payload[key];
+  if (typeof v !== "number" || !Number.isInteger(v)) {
+    throw new UsageError(`missing/invalid integer field: ${key}`);
+  }
+  return v;
+}
+
+function optStr(payload: Record<string, unknown>, key: string): string | undefined {
+  const v = payload[key];
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+function optLimit(flag: string | boolean | undefined): number | undefined {
+  if (flag === undefined || flag === true || flag === false) return undefined;
+  const n = Number(flag);
+  if (!Number.isInteger(n) || n < 1) throw new UsageError("--limit must be a positive integer");
+  return n;
+}
+
+export function helpText(): string {
+  return [
+    "intent — AI code provenance, anchored to git blob hashes.",
+    "",
+    "Usage:",
+    "  intent show <file>:<line>            intent covering a current line",
+    "  intent file <path>                   full provenance for a file (alias: log)",
+    "  intent search <query> [--file f] [--limit n]",
+    "  intent session <session-id>          what a session did + why",
+    "  intent stats                         repo summary",
+    "  intent export                        ndjson of every intent",
+    "  intent annotate                      capture (JSON payload on stdin)",
+    "  intent update                        amend detail (JSON payload on stdin)",
+    "",
+    "Flags:",
+    "  --json     machine-readable output (read commands)",
+    "",
+    "Write payload (annotate): { file, line_start, line_end, summary,",
+    "  detail?, task_ref?, intent_id?, session_id? }",
+    "Write payload (update):   { intent_id, detail, append? }",
+  ].join("\n");
+}
