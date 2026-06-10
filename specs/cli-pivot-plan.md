@@ -1,8 +1,15 @@
-# Plan — Pivot from MCP server to CLI + skill
+# Plan — Pivot from MCP server to a droppable `intent` skill
 
-> Status: proposed. Supersedes milestones M5–M7 in [mcp-intent-spec.md](mcp-intent-spec.md).
-> Decision: drop the MCP server entirely, rename the package `mcp-intent` → `intent`,
-> hand-rolled zero-dep CLI as the single interface for both humans and Claude.
+> Status: in progress (Phases 1–3 done). Supersedes milestones M5–M7 in
+> [mcp-intent-spec.md](mcp-intent-spec.md).
+>
+> Decisions:
+> - Drop the MCP server entirely; rename `mcp-intent` → `intent`.
+> - Hand-rolled zero-dep CLI as the single interface for humans + Claude.
+> - **Swap `better-sqlite3` → `node:sqlite`** (built-in, sync, FTS5+bm25 verified) so the
+>   tool is pure JS with zero runtime deps — no native compile, no `node_modules`.
+> - Ship as a **self-contained skill bundle** droppable into any `.claude/skills/`
+>   (project or `~/.claude`), with an `install.mjs` that wires hooks + PATH shims.
 
 ## Why
 
@@ -100,50 +107,74 @@ Write payload contract (`annotate`):
   "session_id": "…from MCP_INTENT_SESSION_ID…" }
 ```
 
+## Distribution — the droppable skill bundle
+
+Built output is a self-contained directory copied into any `.claude/skills/`:
+
+```
+intent/
+  SKILL.md                    /intent + capture convention (Phase 3)
+  dist/                       compiled JS — pure node:sqlite, no node_modules
+  bin/intent                  shim: NODE_NO_WARNINGS=1 node --experimental-sqlite <dist>/cli/main.js "$@"
+  bin/intent-hook             shim: same, → dist/hooks/cli.js
+  install.mjs                 one-shot setup (node — present by definition)
+```
+
+`install.mjs` is idempotent and does three things:
+1. Merge the 3 hooks (SessionStart / PreToolUse / PostToolUse) into the target
+   `settings.json` **without clobbering** existing hook entries.
+2. Drop `intent` + `intent-hook` shims onto PATH (`~/.local/bin`), so humans and Claude
+   both just call `intent`.
+3. Write the hook `command` as the absolute shim path — no PATH assumption for the hook.
+
+Shims bake in `--experimental-sqlite` + `NODE_NO_WARNINGS=1` so the experimental flag and
+its warning never leak. (Flag is a no-op / unneeded on node ≥ 23.4.)
+
 ## Phases
 
-### Phase 1 — CLI spine
-- [ ] `src/cli/parse.ts` — tiny hand-rolled arg/subcommand parser (no commander).
-- [ ] `src/cli/format.ts` — human vs `--json` output formatters (reuse the `serialize`
-      shape currently in `mcp/server.ts:29` before that file dies).
-- [ ] `src/cli/commands.ts` — one handler per command over `capture` / `query` / `db`.
-- [ ] `src/cli/main.ts` — entry, `bin: intent`. Resolve repo root + open db like the hook does.
-- [ ] Tests: parser + each command (human + `--json`).
+### Phase 1 — CLI spine ✅ DONE
+`src/cli/` (parse, format, commands, main), `bin: intent`, JSON-on-stdin writes, 22 tests.
 
-### Phase 2 — Rewire hooks
-- [ ] Update nudge strings in `src/hooks/handler.ts` (`buildSessionStartContext`,
-      `buildPreEditContext`, `buildPostEditReminder`) to name CLI commands, not MCP tools.
-      e.g. PostToolUse → "run `intent annotate --json -` with {file,line_start,…}".
-- [ ] Rename bin `mcp-intent-hook` → `intent-hook`.
-- [ ] Fix the hook tests asserting the old "call annotate_intent" wording.
+### Phase 2 — Rewire hooks ✅ DONE
+Hook nudges name CLI commands; bin `mcp-intent-hook` → `intent-hook`; example + live configs updated.
 
-### Phase 3 — Skill (human-driven + teaches the convention)
-- [ ] `.claude/skills/intent/SKILL.md` — `/intent` for ad-hoc human queries; documents the
-      full CLI surface and the capture convention/significance threshold. The auto-loop does
-      **not** depend on this (hooks carry the command inline) — it's the on-demand wrapper.
+### Phase 3 — Skill ✅ DONE
+`.claude/skills/intent/SKILL.md` — `/intent`, CLI surface, capture convention, heredoc capture pattern.
+*(Outstanding: PATH allow-list entry in `settings.local.json` was classifier-denied; needs user ok.)*
 
-### Phase 4 — Remove MCP
-- [ ] Delete `src/mcp/` (server, stdio, tests).
-- [ ] `package.json`: drop `mcp-intent-server` bin, drop `@modelcontextprotocol/sdk` + `zod`.
-- [ ] Delete `.mcp.json`; update `examples/` + `docs/claude-code-integration.md` (hooks only now).
+### Phase 4 — DB driver swap (`better-sqlite3` → `node:sqlite`) **[NEW]**
+- [ ] Rewrite `src/db/connection.ts`: `DatabaseSync`, manual `BEGIN/COMMIT/ROLLBACK`
+      (no `.transaction()`), `PRAGMA user_version` via `exec`/`prepare`.
+- [ ] Adapt `src/db/intents.ts` named params to node:sqlite binding (`@name` object form).
+- [ ] Adapt `src/capture.ts` transaction usage (it uses `db.transaction(...)`).
+- [ ] Verify FTS5 triggers + bm25 search still pass the existing suite.
+- [ ] Drop `better-sqlite3` + `@types/better-sqlite3` from `package.json`.
 
-### Phase 5 — Rename `mcp-intent` → `intent`
-- [ ] `package.json` name + bins. CLAUDE.md, spec, docs, README refs.
-- [ ] Keep `MCP_INTENT_SESSION_ID` env var name for back-compat, or rename to
-      `INTENT_SESSION_ID` (decide during phase).
+### Phase 5 — Remove MCP (was 4)
+- [ ] Delete `src/mcp/` (server, stdio, tests). Drop `mcp-intent-server` bin + `@modelcontextprotocol/sdk` + `zod`.
+- [ ] Delete `.mcp.json`; strip `enabledMcpjsonServers` + `mcp__intent__*` perms; update docs/examples.
 
-### Phase 6 — Post-commit hook (was M6)
-- [ ] `intent-hook` gains a post-commit mode (or a dedicated subcommand) backfilling
-      `commit_hash` where NULL, matched by `blob_hash`. Optional install, not forced.
+### Phase 6 — Rename `mcp-intent` → `intent` (was 5)
+- [ ] `package.json` name. CLAUDE.md, spec, docs, README refs.
+- [ ] `MCP_INTENT_SESSION_ID` → `INTENT_SESSION_ID` (keep old as fallback; CLI already reads both).
 
-### Phase 7 — Export (was M7)
-- [ ] `intent export` already specced in Phase 1 surface; ndjson stream for cross-repo.
+### Phase 7 — Bundle + `install.mjs` (distribution) **[NEW — replaces npm-link]**
+- [ ] Build step assembles the `intent/` skill bundle (SKILL.md + dist + bin shims + install.mjs).
+- [ ] `install.mjs`: settings.json hook merge, PATH shims, idempotent, `--dry-run`.
+- [ ] Dogfood: install into this repo's `.claude` and a throwaway repo.
+
+### Phase 8 — Post-commit hook (was M6)
+- [ ] `intent-hook` gains a post-commit mode backfilling `commit_hash` where NULL, matched by `blob_hash`.
+
+### Phase 9 — Export ✅ effectively done
+`intent export` (ndjson) landed in Phase 1; revisit only if cross-repo ingest needs a different shape.
 
 ## Files: add / change / delete
 
-- **Add**: `src/cli/*`, `.claude/skills/intent/SKILL.md`
-- **Change**: `src/hooks/handler.ts` + `cli.ts`, `package.json`, CLAUDE.md, spec, docs, examples
-- **Delete**: `src/mcp/`, `.mcp.json`
+- **Add**: `src/cli/*` ✅, `.claude/skills/intent/SKILL.md` ✅, `install.mjs`, `bin/` shims
+- **Change**: `src/hooks/*` ✅, `src/db/*` (node:sqlite swap), `src/capture.ts` (txn), `package.json`,
+  CLAUDE.md, spec, docs, examples
+- **Delete**: `src/mcp/`, `.mcp.json`, `better-sqlite3` + `@modelcontextprotocol/sdk` + `zod` deps
 
 ## Risks / watch-outs
 
