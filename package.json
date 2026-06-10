@@ -8,8 +8,7 @@
   "types": "dist/index.d.ts",
   "bin": {
     "intent": "dist/cli/main.js",
-    "intent-hook": "dist/hooks/cli.js",
-    "mcp-intent-server": "dist/mcp/stdio.js"
+    "intent-hook": "dist/hooks/cli.js"
   },
   "exports": {
     ".": {
@@ -26,10 +25,7 @@
     "test": "NODE_OPTIONS=\"--experimental-sqlite --no-warnings\" vitest run",
     "test:watch": "NODE_OPTIONS=\"--experimental-sqlite --no-warnings\" vitest"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "zod": "^4.4.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.10.5",
     "typescript": "^5.7.3",

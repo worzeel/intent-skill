@@ -1,7 +1,0 @@
-{
-  "mcpServers": {
-    "intent": {
-      "command": "mcp-intent-server"
-    }
-  }
-}

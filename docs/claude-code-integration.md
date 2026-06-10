@@ -1,36 +1,34 @@
-# Claude Code integration (Milestone 4)
+# Claude Code integration
 
-Two moving parts wire `mcp-intent` into Claude Code:
+Three moving parts wire `intent` into Claude Code:
 
-1. **The MCP server** (`mcp-intent-server`) exposes the capture/query tools.
-2. **The hook helper** (`intent-hook`) injects provenance into context automatically.
+1. **The `intent` CLI** (`bin: intent`) — capture + query over `.git/intent.db`. The single
+   interface for both humans and Claude.
+2. **The hook helper** (`bin: intent-hook`) — injects provenance into context automatically
+   and nudges Claude to capture.
+3. **The `/intent` skill** ([`.claude/skills/intent/SKILL.md`](../../.claude/skills/intent/SKILL.md)) —
+   teaches Claude the CLI surface + capture convention for ad-hoc, human-driven queries.
 
-Both ship as `bin` entries — `npm install -g mcp-intent` (or reference the built
-paths directly during local dev, e.g. `node /abs/path/dist/mcp/stdio.js`).
+Both bins are pure JS over `node:sqlite` — no native build, no runtime deps.
+> Phase 7 will ship an `install.mjs` that wires all of this automatically. Until then, the
+> steps below are manual.
 
-## 1. Register the MCP server
+## 1. Put the bins on PATH
 
-Drop a `.mcp.json` at the repo root (see [`examples/.mcp.json`](../examples/.mcp.json)):
+During local dev, from the repo: `npm run build` then `npm link` (exposes `intent` +
+`intent-hook`). Or reference the built entry directly, e.g.
+`node --experimental-sqlite /abs/path/dist/cli/main.js`.
 
-```json
-{
-  "mcpServers": {
-    "intent": { "command": "mcp-intent-server" }
-  }
-}
-```
+`node:sqlite` needs `--experimental-sqlite` on node < 23.4 (on newer node it just works). The
+installed shims pass `--experimental-sqlite --no-warnings` so this is transparent.
 
-The server is run from the repo, opens `.git/intent.db`, and serves:
-
-- Write: `annotate_intent`, `update_intent`
-- Read: `get_intent`, `search_intent`, `get_file_intent`, `get_session_intent`
-
-Set `MCP_INTENT_SESSION_ID` in the server's env to stamp captures with a session id.
+Set `INTENT_SESSION_ID` (or `MCP_INTENT_SESSION_ID`) in the environment to stamp captures with
+a session id.
 
 ## 2. Wire the hooks
 
-Merge [`examples/settings.hooks.json`](../examples/settings.hooks.json) into your
-Claude Code `settings.json` (project `.claude/settings.json` or user-level):
+Merge [`examples/settings.hooks.json`](../examples/settings.hooks.json) into your Claude Code
+`settings.json` (project `.claude/settings.json` or user-level):
 
 ```json
 {
@@ -50,27 +48,27 @@ Claude Code `settings.json` (project `.claude/settings.json` or user-level):
 }
 ```
 
-One command handles every event — it branches on `hook_event_name` from the hook
-stdin payload.
+One command handles every event — it branches on `hook_event_name` from the hook stdin payload.
 
 ### What each hook does
 
 | Event | Behaviour |
 |-------|-----------|
-| `SessionStart` | Injects a short repo summary (intent/file counts + 5 most recent) and a reminder to use the tools. Silent when nothing is recorded. |
+| `SessionStart` | Injects a short repo summary (intent/file counts + 5 most recent) and a reminder to use the `intent` CLI. Silent when nothing is recorded. |
 | `PreToolUse` (edits) | Injects existing provenance for the file about to be edited, so Claude doesn't contradict or re-solve prior decisions. Lines are re-resolved to current positions. Silent when the file has no recorded intent. |
-| `PostToolUse` (edits) | Nudges Claude to call `annotate_intent` if the change was significant. |
+| `PostToolUse` (edits) | Nudges Claude to run `intent annotate --json -` if the change was significant, with the target file pre-filled into the payload. |
 
-Context is returned via `hookSpecificOutput.additionalContext`. The hook is
-**fail-safe**: any error (not a git repo, no db, bad input) exits 0 with no output,
-so it can never block a session.
+Context is returned via `hookSpecificOutput.additionalContext`. The hook is **fail-safe**: any
+error (not a git repo, no db, bad input) exits 0 with no output, so it can never block a session.
 
-## 3. Auto-capture instructions (optional but recommended)
+## 3. Capture convention (optional but recommended)
 
-The harness can surface provenance and nudge, but only Claude can synthesise the
-*why*. Add to the project `CLAUDE.md` so capture is consistent:
+The harness surfaces provenance and nudges, but only Claude can synthesise the *why*. The
+`/intent` skill documents this; you can also add it to the project `CLAUDE.md` so capture is
+consistent:
 
-> After any significant file change (new logic, a workaround, an architectural
-> decision), call `annotate_intent` with a concise summary and the reasoning.
-> Skip formatting-only / whitespace / generated-file changes. Before editing a
-> file, the `get_file_intent` provenance is injected automatically — respect it.
+> After any significant file change (new logic, a workaround, an architectural decision), run
+> `intent annotate --json -` with a concise summary and the reasoning (JSON payload on stdin;
+> a quoted heredoc keeps multiline detail clean). Skip formatting-only / whitespace /
+> generated-file changes. Before editing a file, `intent file <path>` provenance is injected
+> automatically — respect it.

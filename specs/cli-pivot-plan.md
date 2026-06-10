@@ -152,9 +152,11 @@ Hook nudges name CLI commands; bin `mcp-intent-hook` → `intent-hook`; example 
 - [x] `npm test` runs under `NODE_OPTIONS=--experimental-sqlite --no-warnings`.
 - Note: on node 22.18 `node:sqlite` works *without* the flag (warns only); shim keeps `--no-warnings`.
 
-### Phase 5 — Remove MCP (was 4)
-- [ ] Delete `src/mcp/` (server, stdio, tests). Drop `mcp-intent-server` bin + `@modelcontextprotocol/sdk` + `zod`.
-- [ ] Delete `.mcp.json`; strip `enabledMcpjsonServers` + `mcp__intent__*` perms; update docs/examples.
+### Phase 5 — Remove MCP (was 4) ✅ DONE
+- [x] Deleted `src/mcp/` + stale `dist/mcp/`; dropped `mcp-intent-server` bin, `@modelcontextprotocol/sdk`, `zod`.
+- [x] Deleted `.mcp.json` + `examples/.mcp.json`; stripped `enabledMcpjsonServers` + `mcp__intent__*` perms.
+- [x] Removed `createIntentServer` from the barrel; rewrote docs (CLI + hooks + skill); updated CLAUDE.md.
+- [x] **`dependencies: {}`** — zero runtime deps. 69 tests pass, typecheck clean.
 
 ### Phase 6 — Rename `mcp-intent` → `intent` (was 5)
 - [ ] `package.json` name. CLAUDE.md, spec, docs, README refs.

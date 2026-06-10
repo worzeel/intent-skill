@@ -30,7 +30,7 @@ export {
   type NewIntentLine,
 } from "./db/intents.js";
 
-// Capture service (write-side) + MCP server
+// Capture service (write-side)
 export {
   annotateIntent,
   updateIntent,
@@ -39,7 +39,6 @@ export {
   type AnnotateResult,
   type UpdateParams,
 } from "./capture.js";
-export { createIntentServer } from "./mcp/server.js";
 
 // Query service (read-side)
 export {
