@@ -40,6 +40,8 @@ export interface AnnotateParams {
    */
   intentId?: string | null;
   sessionId?: string | null;
+  /** Unix seconds for the intent's created_at; defaults to now. Used by backfill. */
+  createdAt?: number | null;
 }
 
 export interface AnnotateResult {
@@ -80,6 +82,7 @@ export async function annotateIntent(
         detail: params.detail,
         taskRef: params.taskRef,
         sessionId,
+        createdAt: params.createdAt ?? undefined,
       }).id;
     }
 

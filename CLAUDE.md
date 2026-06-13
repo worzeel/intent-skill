@@ -38,6 +38,13 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
   `install.mjs` wires hooks + PATH shims, idempotent, `--dry-run`/`--project`/`--bin-dir`/`--settings`.
 - **Phase 8 done**: post-commit backfill — `intent backfill` + `intent install-commit-hook`; `src/backfill.ts`
   + `src/git/commit.ts`. Stamps `commit_hash` (NULL until committed) from HEAD's blobs.
+- **Transcript backfill**: `intent backfill-transcript [path]` recovers latent provenance from Claude Code
+  session transcripts (`~/.claude/projects/<encoded-repo-path>/*.jsonl`). `src/transcript.ts` parses the
+  JSONL (defensively — schema is internal/undocumented) into edits + their reasoning text; `src/backfill-transcript.ts`
+  re-anchors each edit to the *current* tree via `locateFragment` and annotates (dedup by session+file+range,
+  idempotent, preserves the transcript timestamp via new `AnnotateParams.createdAt`). Best-effort: superseded
+  edits won't match current content. Deterministic/LLM-free — summaries come verbatim from reasoning, so they
+  can be rough; an LLM-synthesis layer could improve quality later.
 - **Pivot complete.** This repo is now the *source*: it builds the bundle but doesn't run intent on itself
   (no hooks; skill source lives in `skill/`).
 - **Cross-platform install** (`install.mjs`): Claude Code hooks are wired as direct `node` invocations

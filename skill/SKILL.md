@@ -63,3 +63,14 @@ content is committed. To stamp it:
 - `intent backfill` — stamps `commit_hash` on pending rows whose blob is in the HEAD commit.
 - `intent install-commit-hook` — installs a fail-safe `post-commit` git hook that runs
   `intent backfill` automatically after every commit (never blocks a commit).
+
+## Recover lost provenance from transcripts (optional)
+
+If provenance was never captured live, it may still be latent in Claude Code's session
+transcripts (`~/.claude/projects/<repo>/*.jsonl`). Mine it deterministically:
+
+- `intent backfill-transcript` — auto-discovers this repo's transcripts and records an intent
+  for every past edit whose content **still matches the current working tree** (best-effort;
+  superseded edits can't be re-anchored). Pass a `.jsonl` file or directory to target specific
+  transcripts. Reasoning is taken verbatim from the transcript, so summaries can be rough —
+  re-run `intent update` to tidy any that matter.

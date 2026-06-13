@@ -12,7 +12,13 @@ import {
 } from "../query.js";
 import { getStats } from "../db/intents.js";
 import { backfillHeadCommit } from "../backfill.js";
+import {
+  backfillFromTranscriptFile,
+  discoverTranscripts,
+  type TranscriptBackfillResult,
+} from "../backfill-transcript.js";
 import { getGitDir } from "../git/repo.js";
+import { statSync, readdirSync } from "node:fs";
 import type { ParsedArgs } from "./parse.js";
 import {
   formatIntents,
@@ -65,6 +71,8 @@ export async function runCommand(
       return exportAll(ctx);
     case "backfill":
       return backfill(ctx, json);
+    case "backfill-transcript":
+      return backfillTranscript(ctx, parsed, json);
     case "install-commit-hook":
       return installCommitHook(ctx);
     case "help":
@@ -174,6 +182,60 @@ async function backfill(ctx: CaptureContext, json: boolean): Promise<string> {
   return json
     ? JSON.stringify({ commit, updated })
     : `backfilled ${updated} record(s) → ${commit.slice(0, 8)}`;
+}
+
+/**
+ * Recover provenance from Claude Code session transcripts. With no path, it
+ * auto-discovers this repo's transcripts under ~/.claude/projects; a path may be
+ * a single .jsonl file or a directory of them. Best-effort — only edits whose
+ * content still matches the current working tree get an intent.
+ */
+async function backfillTranscript(
+  ctx: CaptureContext,
+  parsed: ParsedArgs,
+  json: boolean,
+): Promise<string> {
+  const files = resolveTranscriptFiles(ctx.repoRoot, parsed.positionals[0]);
+  if (files.length === 0) {
+    throw new UsageError(
+      "no transcripts found — pass a .jsonl file/dir, or check ~/.claude/projects for this repo",
+    );
+  }
+
+  const totals: TranscriptBackfillResult = {
+    parsed: 0,
+    created: 0,
+    skippedNoMatch: 0,
+    skippedOutsideRepo: 0,
+    skippedTrivial: 0,
+    duplicates: 0,
+  };
+  for (const file of files) {
+    const r = await backfillFromTranscriptFile(ctx, file);
+    for (const k of Object.keys(totals) as (keyof TranscriptBackfillResult)[]) totals[k] += r[k];
+  }
+
+  if (json) return JSON.stringify({ transcripts: files.length, ...totals });
+  return (
+    `transcripts: ${files.length} | edits: ${totals.parsed} → ` +
+    `created ${totals.created}, dupes ${totals.duplicates}, ` +
+    `no-match ${totals.skippedNoMatch}, trivial ${totals.skippedTrivial}, ` +
+    `outside-repo ${totals.skippedOutsideRepo}`
+  );
+}
+
+/** Expand the optional path arg into a list of .jsonl files (or auto-discover). */
+function resolveTranscriptFiles(repoRoot: string, arg: string | undefined): string[] {
+  if (!arg) return discoverTranscripts(repoRoot);
+  const resolved = path.resolve(arg);
+  const stat = statSync(resolved, { throwIfNoEntry: false });
+  if (!stat) throw new UsageError(`no such file or directory: ${arg}`);
+  if (stat.isDirectory()) {
+    return readdirSync(resolved)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => path.join(resolved, f));
+  }
+  return [resolved];
 }
 
 /** Marker line identifying a post-commit hook as ours (for self-heal/idempotency). */
@@ -294,6 +356,7 @@ export function helpText(): string {
     "  intent annotate                      capture (JSON payload on stdin)",
     "  intent update                        amend detail (JSON payload on stdin)",
     "  intent backfill                      stamp commit_hash from the HEAD commit",
+    "  intent backfill-transcript [path]    recover intents from session transcript(s)",
     "  intent install-commit-hook           add a post-commit hook that backfills",
     "",
     "Flags:",

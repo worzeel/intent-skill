@@ -67,6 +67,15 @@ export {
   type BackfillResult,
 } from "./backfill.js";
 
+// Transcript backfill (recover provenance from Claude Code session transcripts)
+export {
+  backfillFromEdits,
+  backfillFromTranscriptFile,
+  discoverTranscripts,
+  type TranscriptBackfillResult,
+} from "./backfill-transcript.js";
+export { parseTranscript, type TranscriptEdit } from "./transcript.js";
+
 // CLI
 export {
   runCommand,

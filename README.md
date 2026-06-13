@@ -120,6 +120,7 @@ Once installed, just talk to Claude — or drive the CLI yourself:
 | What did a session do? | `intent session <session-id>` |
 | Repo summary | `intent stats` |
 | Dump everything (ndjson) | `intent export` |
+| Recover provenance from past sessions | `intent backfill-transcript` |
 
 Capture (usually Claude does this, prompted by the hook):
 
@@ -130,6 +131,12 @@ intent annotate --json - <<'EOF'
   "detail": "Provider rate-limits bursts; exponential backoff avoids tripping it." }
 EOF
 ```
+
+**Lost provenance?** If a change's *why* was never captured live, it may still be latent in
+Claude Code's session transcripts (`~/.claude/projects/<repo>/*.jsonl`). `intent
+backfill-transcript` mines those deterministically — recording an intent for every past edit
+whose content still matches the current tree. Best-effort: edits later overwritten can't be
+re-anchored, and summaries come verbatim from the transcript so they can be rough.
 
 See [`skill/SKILL.md`](skill/SKILL.md) for the full CLI surface and capture
 convention, and [`docs/claude-code-integration.md`](docs/claude-code-integration.md)
