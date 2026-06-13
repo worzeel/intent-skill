@@ -12,7 +12,7 @@ import { runCommand, helpText, UsageError } from "./commands.js";
  * Exit codes: 0 ok, 1 runtime error, 2 usage error.
  */
 
-const BOOLEAN_FLAGS = new Set(["json", "help"]);
+const BOOLEAN_FLAGS = new Set(["json", "help", "dry-run"]);
 
 async function main(): Promise<number> {
   const parsed = parseArgs(process.argv.slice(2), BOOLEAN_FLAGS);

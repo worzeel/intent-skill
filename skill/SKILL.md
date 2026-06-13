@@ -72,5 +72,7 @@ transcripts (`~/.claude/projects/<repo>/*.jsonl`). Mine it deterministically:
 - `intent backfill-transcript` — auto-discovers this repo's transcripts and records an intent
   for every past edit whose content **still matches the current working tree** (best-effort;
   superseded edits can't be re-anchored). Pass a `.jsonl` file or directory to target specific
-  transcripts. Reasoning is taken verbatim from the transcript, so summaries can be rough —
-  re-run `intent update` to tidy any that matter.
+  transcripts. Reasoning is taken verbatim from the transcript, so summaries can be rough.
+- For **good** summaries, use the **`/intent-backfill` skill** instead: it runs
+  `intent backfill-transcript --dry-run` to get matched candidates, synthesises a tight *why*
+  per edit, and writes them via `intent annotate` (preserving session id + original date).

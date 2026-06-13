@@ -42,9 +42,15 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
   session transcripts (`~/.claude/projects/<encoded-repo-path>/*.jsonl`). `src/transcript.ts` parses the
   JSONL (defensively — schema is internal/undocumented) into edits + their reasoning text; `src/backfill-transcript.ts`
   re-anchors each edit to the *current* tree via `locateFragment` and annotates (dedup by session+file+range,
-  idempotent, preserves the transcript timestamp via new `AnnotateParams.createdAt`). Best-effort: superseded
-  edits won't match current content. Deterministic/LLM-free — summaries come verbatim from reasoning, so they
-  can be rough; an LLM-synthesis layer could improve quality later.
+  idempotent, preserves the transcript timestamp via `AnnotateParams.createdAt`; paths realpath-canonicalised
+  both ends). Best-effort: superseded edits won't match current content. Two layers:
+  `resolveCandidates` does the deterministic match (no writes); `backfillFromEdits` writes raw reasoning verbatim.
+- **LLM-synthesised backfill**: `intent backfill-transcript --dry-run` emits the matched, deduped candidates as
+  JSON (resolved line range + reasoning + code snippet) instead of writing. The **`/intent-backfill` skill**
+  (`skill/intent-backfill/SKILL.md`) consumes that: judges significance, synthesises a tight summary/detail per
+  edit, and writes via `intent annotate --json -` (now accepts `created_at` + `session_id` to preserve
+  provenance). Bundle ships two skill folders now: `bundle/intent/` (CLI+hooks+installer) and
+  `bundle/intent-backfill/` (SKILL.md only — drives the CLI).
 - **Pivot complete.** This repo is now the *source*: it builds the bundle but doesn't run intent on itself
   (no hooks; skill source lives in `skill/`).
 - **Cross-platform install** (`install.mjs`): Claude Code hooks are wired as direct `node` invocations

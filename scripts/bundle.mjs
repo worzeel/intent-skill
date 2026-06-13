@@ -6,14 +6,18 @@ import { fileURLToPath } from "node:url";
 /**
  * Assemble the droppable `intent` skill bundle. Run after `npm run build`:
  *
- *   bundle/intent/
- *     SKILL.md        the /intent skill
- *     dist/           compiled JS (pure node:sqlite, no node_modules)
- *     install.mjs     one-shot setup (hooks + PATH shims)
- *     README.md       how to install
+ *   bundle/
+ *     intent/
+ *       SKILL.md        the /intent skill
+ *       dist/           compiled JS (pure node:sqlite, no node_modules)
+ *       install.mjs     one-shot setup (hooks + PATH shims + git hook)
+ *       README.md       how to install
+ *     intent-backfill/
+ *       SKILL.md        the /intent-backfill skill (transcript → provenance)
  *
- * Copy `bundle/intent/` into any `.claude/skills/` (project or ~/.claude) and
- * run `node intent/install.mjs`.
+ * Copy each folder into a `.claude/skills/` dir (project or ~/.claude) and run
+ * `node intent/install.mjs`. The intent-backfill skill drives the `intent` CLI,
+ * so it needs no dist of its own.
  */
 
 const README = `# intent — code provenance skill
@@ -24,10 +28,12 @@ built-in \`node:sqlite\` — no native build, no dependencies.
 
 ## Install
 
-1. Copy this \`intent/\` folder into a \`.claude/skills/\` directory:
-   - \`~/.claude/skills/intent/\` for all repos, or
-   - \`<project>/.claude/skills/intent/\` for one repo.
-2. From that folder, run the installer:
+1. Copy both skill folders into a \`.claude/skills/\` directory (\`~/.claude/skills/\`
+   for all repos, or \`<project>/.claude/skills/\` for one repo):
+   - \`intent/\` — the CLI, hooks, installer, and the \`/intent\` skill.
+   - \`intent-backfill/\` — the \`/intent-backfill\` skill (reconstruct provenance
+     from past session transcripts). Drives the \`intent\` CLI, so no dist of its own.
+2. From the \`intent/\` folder, run the installer:
 
    \`\`\`sh
    node install.mjs              # hooks into ~/.claude (all repos)
@@ -68,4 +74,14 @@ copyFileSync(path.join(root, "skill", "SKILL.md"), path.join(out, "SKILL.md"));
 copyFileSync(path.join(root, "scripts", "install.mjs"), path.join(out, "install.mjs"));
 writeFileSync(path.join(out, "README.md"), README);
 
-process.stdout.write(`Bundle assembled at ${path.relative(root, out)}/\n`);
+// Second skill: intent-backfill (SKILL.md only — it drives the intent CLI).
+const backfillOut = path.join(root, "bundle", "intent-backfill");
+mkdirSync(backfillOut, { recursive: true });
+copyFileSync(
+  path.join(root, "skill", "intent-backfill", "SKILL.md"),
+  path.join(backfillOut, "SKILL.md"),
+);
+
+process.stdout.write(
+  `Bundle assembled at ${path.relative(root, path.join(root, "bundle"))}/ (intent/, intent-backfill/)\n`,
+);

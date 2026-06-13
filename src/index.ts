@@ -71,7 +71,11 @@ export {
 export {
   backfillFromEdits,
   backfillFromTranscriptFile,
+  resolveCandidates,
+  resolveCandidatesFromFile,
   discoverTranscripts,
+  type BackfillCandidate,
+  type ResolvedCandidates,
   type TranscriptBackfillResult,
 } from "./backfill-transcript.js";
 export { parseTranscript, type TranscriptEdit } from "./transcript.js";

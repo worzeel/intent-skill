@@ -14,7 +14,9 @@ import { getStats } from "../db/intents.js";
 import { backfillHeadCommit } from "../backfill.js";
 import {
   backfillFromTranscriptFile,
+  resolveCandidatesFromFile,
   discoverTranscripts,
+  type BackfillCandidate,
   type TranscriptBackfillResult,
 } from "../backfill-transcript.js";
 import { getGitDir } from "../git/repo.js";
@@ -98,6 +100,7 @@ async function annotate(
     taskRef: optStr(payload, "task_ref"),
     intentId: optStr(payload, "intent_id"),
     sessionId: optStr(payload, "session_id"),
+    createdAt: optInt(payload, "created_at"),
   });
   return json
     ? JSON.stringify({
@@ -189,6 +192,12 @@ async function backfill(ctx: CaptureContext, json: boolean): Promise<string> {
  * auto-discovers this repo's transcripts under ~/.claude/projects; a path may be
  * a single .jsonl file or a directory of them. Best-effort — only edits whose
  * content still matches the current working tree get an intent.
+ *
+ * `--dry-run` writes nothing and instead emits the matched, de-duplicated
+ * candidates (with resolved line ranges + raw reasoning). That's the hand-off to
+ * the `intent-backfill` skill, which synthesises a tight summary per candidate
+ * and writes them via `intent annotate`. Without `--dry-run`, the raw reasoning
+ * is stored verbatim.
  */
 async function backfillTranscript(
   ctx: CaptureContext,
@@ -201,6 +210,7 @@ async function backfillTranscript(
       "no transcripts found — pass a .jsonl file/dir, or check ~/.claude/projects for this repo",
     );
   }
+  const dryRun = parsed.flags["dry-run"] === true;
 
   const totals: TranscriptBackfillResult = {
     parsed: 0,
@@ -210,9 +220,23 @@ async function backfillTranscript(
     skippedTrivial: 0,
     duplicates: 0,
   };
+  const candidates: BackfillCandidate[] = [];
+
   for (const file of files) {
-    const r = await backfillFromTranscriptFile(ctx, file);
-    for (const k of Object.keys(totals) as (keyof TranscriptBackfillResult)[]) totals[k] += r[k];
+    if (dryRun) {
+      const { candidates: cs, result } = await resolveCandidatesFromFile(ctx, file);
+      candidates.push(...cs);
+      for (const k of Object.keys(totals) as (keyof TranscriptBackfillResult)[]) totals[k] += result[k];
+    } else {
+      const r = await backfillFromTranscriptFile(ctx, file);
+      for (const k of Object.keys(totals) as (keyof TranscriptBackfillResult)[]) totals[k] += r[k];
+    }
+  }
+
+  if (dryRun) {
+    // Emit candidates for the synthesis skill. JSON regardless of --json: the
+    // payload is the whole point of dry-run.
+    return JSON.stringify({ transcripts: files.length, candidates }, null, json ? 0 : 2);
   }
 
   if (json) return JSON.stringify({ transcripts: files.length, ...totals });
@@ -335,6 +359,11 @@ function optStr(payload: Record<string, unknown>, key: string): string | undefin
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
+function optInt(payload: Record<string, unknown>, key: string): number | undefined {
+  const v = payload[key];
+  return typeof v === "number" && Number.isInteger(v) ? v : undefined;
+}
+
 function optLimit(flag: string | boolean | undefined): number | undefined {
   if (flag === undefined || flag === true || flag === false) return undefined;
   const n = Number(flag);
@@ -356,14 +385,14 @@ export function helpText(): string {
     "  intent annotate                      capture (JSON payload on stdin)",
     "  intent update                        amend detail (JSON payload on stdin)",
     "  intent backfill                      stamp commit_hash from the HEAD commit",
-    "  intent backfill-transcript [path]    recover intents from session transcript(s)",
+    "  intent backfill-transcript [path] [--dry-run]   recover intents from transcript(s)",
     "  intent install-commit-hook           add a post-commit hook that backfills",
     "",
     "Flags:",
     "  --json     machine-readable output (read commands)",
     "",
     "Write payload (annotate): { file, line_start, line_end, summary,",
-    "  detail?, task_ref?, intent_id?, session_id? }",
+    "  detail?, task_ref?, intent_id?, session_id?, created_at? }",
     "Write payload (update):   { intent_id, detail, append? }",
   ].join("\n");
 }

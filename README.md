@@ -23,11 +23,14 @@ npm run bundle      # runs the build, then assembles bundle/intent/
 That produces:
 
 ```
-bundle/intent/
-├── SKILL.md        the /intent skill
-├── dist/           compiled JS (zero node_modules)
-├── install.mjs     one-shot setup (hooks + CLI shims + git hook)
-└── README.md       install notes
+bundle/
+├── intent/                the /intent skill + everything it needs
+│   ├── SKILL.md
+│   ├── dist/              compiled JS (zero node_modules)
+│   ├── install.mjs        one-shot setup (hooks + CLI shims + git hook)
+│   └── README.md          install notes
+└── intent-backfill/       the /intent-backfill skill (transcript → provenance)
+    └── SKILL.md            (drives the intent CLI, so no dist of its own)
 ```
 
 ### 2. Drop it into a `.claude/` skills directory
@@ -38,14 +41,17 @@ Copy the **`bundle/intent/`** folder into a `.claude/skills/` dir — either:
 - **`<your-project>/.claude/skills/intent/`** — just that one repo.
 
 ```sh
-# global (all repos)
+# global (all repos) — copy both skill folders
 mkdir -p ~/.claude/skills
-cp -R bundle/intent ~/.claude/skills/intent
+cp -R bundle/intent bundle/intent-backfill ~/.claude/skills/
 
 # …or per-project
 mkdir -p /path/to/your-project/.claude/skills
-cp -R bundle/intent /path/to/your-project/.claude/skills/intent
+cp -R bundle/intent bundle/intent-backfill /path/to/your-project/.claude/skills/
 ```
+
+(`intent-backfill` is optional — it's the provenance-recovery skill. The core
+tool works with just `intent/`.)
 
 ### 3. Run the installer
 
@@ -133,10 +139,14 @@ EOF
 ```
 
 **Lost provenance?** If a change's *why* was never captured live, it may still be latent in
-Claude Code's session transcripts (`~/.claude/projects/<repo>/*.jsonl`). `intent
-backfill-transcript` mines those deterministically — recording an intent for every past edit
-whose content still matches the current tree. Best-effort: edits later overwritten can't be
-re-anchored, and summaries come verbatim from the transcript so they can be rough.
+Claude Code's session transcripts (`~/.claude/projects/<repo>/*.jsonl`). Two ways to recover it:
+
+- **`/intent-backfill` skill** (recommended) — Claude reads the matched candidates, synthesises a
+  tight *why* per edit, and records them (preserving the original session + date). Good summaries.
+- **`intent backfill-transcript`** — the deterministic CLI underneath: records every past edit
+  whose content still matches the current tree, with the raw reasoning verbatim.
+
+Either way it's best-effort: edits later overwritten can't be re-anchored.
 
 See [`skill/SKILL.md`](skill/SKILL.md) for the full CLI surface and capture
 convention, and [`docs/claude-code-integration.md`](docs/claude-code-integration.md)

@@ -6,7 +6,11 @@ import { openIntentDb, type IntentDatabase } from "./db/connection.js";
 import { getIntent, getIntentLines } from "./db/intents.js";
 import { getAllResolvedIntents } from "./query.js";
 import type { CaptureContext } from "./capture.js";
-import { backfillFromEdits, backfillFromTranscriptFile } from "./backfill-transcript.js";
+import {
+  backfillFromEdits,
+  backfillFromTranscriptFile,
+  resolveCandidates,
+} from "./backfill-transcript.js";
 import type { TranscriptEdit } from "./transcript.js";
 
 let repo: TempRepo;
@@ -103,6 +107,45 @@ describe("backfillFromEdits", () => {
     expect(second.created).toBe(0);
     expect(second.duplicates).toBe(1);
     expect((await getAllResolvedIntents(ctx)).length).toBe(1);
+  });
+});
+
+describe("resolveCandidates (dry-run / LLM hand-off)", () => {
+  it("returns matched candidates with resolved line ranges and writes nothing", async () => {
+    await write("a.ts", "head\nfunction retry() { backoff(); }\ntail\n");
+    const edit = makeEdit({
+      file: path.join(repo.root, "a.ts"),
+      newText: "function retry() { backoff(); }",
+      reasoning: "Retry with backoff",
+    });
+
+    const { candidates, result } = await resolveCandidates(ctx, [edit]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      file: "a.ts",
+      lineStart: 2,
+      lineEnd: 2,
+      sessionId: "sess-1",
+      createdAt: 1_700_000_000,
+      reasoning: "Retry with backoff",
+    });
+    expect(candidates[0].snippet).toContain("function retry()");
+    // result.created stays 0 — nothing persisted.
+    expect(result.created).toBe(0);
+    expect((await getAllResolvedIntents(ctx)).length).toBe(0);
+  });
+
+  it("drops candidates already recorded for that session+file+range", async () => {
+    await write("a.ts", "function retry() { backoff(); }\n");
+    const edit = makeEdit({
+      file: path.join(repo.root, "a.ts"),
+      newText: "function retry() { backoff(); }",
+    });
+    await backfillFromEdits(ctx, [edit]); // record it
+
+    const { candidates, result } = await resolveCandidates(ctx, [edit]);
+    expect(candidates).toHaveLength(0);
+    expect(result.duplicates).toBe(1);
   });
 });
 
