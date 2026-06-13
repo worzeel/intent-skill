@@ -30,13 +30,25 @@ built-in \`node:sqlite\` — no native build, no dependencies.
 2. From that folder, run the installer:
 
    \`\`\`sh
-   node install.mjs            # hooks into ~/.claude (all repos)
-   node install.mjs --project  # hooks into ./.claude (this repo only)
-   node install.mjs --dry-run  # preview, change nothing
+   node install.mjs              # hooks into ~/.claude (all repos)
+   node install.mjs --project    # hooks into ./.claude (this repo only)
+   node install.mjs --dry-run    # preview, change nothing
+   node install.mjs --no-commit-hook   # skip the post-commit git hook
    \`\`\`
 
-This drops \`intent\` + \`intent-hook\` shims on PATH (~/.local/bin) and wires the
-SessionStart / PreToolUse / PostToolUse hooks. See \`SKILL.md\` for usage.
+This (1) drops \`intent\` + \`intent-hook\` shims on PATH (~/.local/bin), (2) wires
+the SessionStart / PreToolUse / PostToolUse Claude Code hooks, and (3) installs a
+post-commit git hook in the current repo that backfills \`commit_hash\` (skip with
+\`--no-commit-hook\`).
+
+**Cross-platform.** Claude Code hooks run as direct \`node\` invocations, so they
+fire on macOS, Linux *and* Windows (a POSIX shim can't be executed by cmd.exe /
+PowerShell). On Windows the installer also writes \`intent.cmd\` + \`intent.ps1\`
+alongside the POSIX shim so a bare \`intent\` resolves in cmd.exe and PowerShell.
+
+**Heads up:** the PostToolUse hook only *nudges* Claude to run \`intent annotate\`
+— it does not write to the db automatically. Provenance is captured when Claude
+(or you) actually runs the annotate command. See \`SKILL.md\` for usage.
 `;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

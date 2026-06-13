@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { annotateIntent, updateIntent, type CaptureContext } from "../capture.js";
 import {
   getAllResolvedIntents,
@@ -175,28 +176,47 @@ async function backfill(ctx: CaptureContext, json: boolean): Promise<string> {
     : `backfilled ${updated} record(s) → ${commit.slice(0, 8)}`;
 }
 
+/** Marker line identifying a post-commit hook as ours (for self-heal/idempotency). */
+const COMMIT_HOOK_MARKER = "# intent backfill hook";
+
+/**
+ * Build the post-commit hook body. It calls node directly against this CLI's
+ * absolute entry (not a bare `intent` on PATH) so it works even where the shim
+ * isn't resolvable — notably git-bash on Windows, which runs `#!/bin/sh` hooks
+ * but has its own PATH. Forward-slash the path so git-bash is happy on Windows.
+ */
+function commitHookScript(): string {
+  const entry = fileURLToPath(new URL("./main.js", import.meta.url)).replace(/\\/g, "/");
+  return (
+    "#!/bin/sh\n" +
+    `${COMMIT_HOOK_MARKER} — stamp commit_hash onto captured intents (never blocks a commit)\n` +
+    `node --experimental-sqlite --no-warnings "${entry}" backfill >/dev/null 2>&1 || true\n`
+  );
+}
+
 /** Install a fail-safe post-commit git hook that runs `intent backfill`. */
 async function installCommitHook(ctx: CaptureContext): Promise<string> {
   const gitDir = await getGitDir(ctx.repoRoot);
   const hookPath = path.join(gitDir, "hooks", "post-commit");
-  const script =
-    "#!/bin/sh\n" +
-    "# intent: stamp commit_hash onto captured intents (never blocks a commit)\n" +
-    "intent backfill >/dev/null 2>&1 || true\n";
+  const script = commitHookScript();
 
+  let verb = "installed";
   if (existsSync(hookPath)) {
-    if (readFileSync(hookPath, "utf8").includes("intent backfill")) {
-      return `post-commit hook already installed → ${hookPath}`;
+    const current = readFileSync(hookPath, "utf8");
+    // Foreign hook we didn't write — never clobber it.
+    if (!current.includes(COMMIT_HOOK_MARKER) && !current.includes("intent backfill")) {
+      throw new UsageError(
+        `a post-commit hook already exists at ${hookPath}; add 'intent backfill' to it manually`,
+      );
     }
-    throw new UsageError(
-      `a post-commit hook already exists at ${hookPath}; add 'intent backfill' to it manually`,
-    );
+    if (current === script) return `post-commit hook already installed → ${hookPath}`;
+    verb = "updated"; // ours, but stale (e.g. old PATH-based body) — self-heal.
   }
 
   mkdirSync(path.dirname(hookPath), { recursive: true });
   writeFileSync(hookPath, script);
   chmodSync(hookPath, 0o755);
-  return `installed post-commit hook → ${hookPath}`;
+  return `${verb} post-commit hook → ${hookPath}`;
 }
 
 function render(resolved: ResolvedIntent[], json: boolean): string {

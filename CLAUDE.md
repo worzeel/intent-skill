@@ -40,6 +40,12 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
   + `src/git/commit.ts`. Stamps `commit_hash` (NULL until committed) from HEAD's blobs.
 - **Pivot complete.** This repo is now the *source*: it builds the bundle but doesn't run intent on itself
   (no hooks; skill source lives in `skill/`).
+- **Cross-platform install** (`install.mjs`): Claude Code hooks are wired as direct `node` invocations
+  (not the no-extension POSIX shim, which cmd.exe/PowerShell can't run) so they fire on Windows too.
+  On win32 it also writes `intent.cmd` + `intent.ps1` next to the POSIX shim (`.PS1` isn't in PATHEXT,
+  so `.cmd` is what makes a bare `intent` resolve in PowerShell). Installs the post-commit git hook by
+  default (`--no-commit-hook` to skip) by delegating to `intent install-commit-hook`; that hook now
+  calls `node <abs>/dist/cli/main.js backfill` (PATH-independent, runs under Git-for-Windows bash).
 
 Hooks (`intent-hook`): SessionStart → repo provenance summary; PreToolUse(edits) → existing intent
 for the target file; PostToolUse(edits) → nudge to `intent annotate`. Context injected via

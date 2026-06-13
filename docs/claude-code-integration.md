@@ -10,8 +10,8 @@ Three moving parts wire `intent` into Claude Code:
    teaches Claude the CLI surface + capture convention for ad-hoc, human-driven queries.
 
 Both bins are pure JS over `node:sqlite` — no native build, no runtime deps.
-> Phase 7 will ship an `install.mjs` that wires all of this automatically. Until then, the
-> steps below are manual.
+> **The bundle's `install.mjs` wires all of this automatically** (`npm run bundle` →
+> `node bundle/intent/install.mjs`). The manual steps below are the fallback / explainer.
 
 ## 1. Put the bins on PATH
 
@@ -49,6 +49,11 @@ Merge [`examples/settings.hooks.json`](../examples/settings.hooks.json) into you
 ```
 
 One command handles every event — it branches on `hook_event_name` from the hook stdin payload.
+
+> **Windows / portability.** A bare `"command": "intent-hook"` only works where the POSIX shim is
+> on PATH and executable — cmd.exe / PowerShell can't run a no-extension shell script. For a
+> portable hook, invoke node directly (this is exactly what `install.mjs` writes):
+> `"command": "node --experimental-sqlite --no-warnings \"<abs>/dist/hooks/cli.js\""`.
 
 ### What each hook does
 
