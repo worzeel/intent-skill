@@ -50,6 +50,14 @@ Optional: `detail`, `task_ref`, `intent_id`, `session_id`.
   anything with a non-obvious reason.
 - **Skip**: formatting, whitespace, import reordering, generated files, trivial renames.
 
+## What to capture (the rationale, not the instruction)
+
+Record the **engineering rationale** — the decision and the tradeoff behind it — not the
+instruction you were handed. Write "chose X over Y because Z", not "user asked for X". This
+matters most with multiple agents: when agents work through a decision the developer didn't
+spell out (or wasn't watching), the intent should preserve *what was decided and why*, so the
+reasoning survives even though no human typed it.
+
 ## Before editing a file
 
 Run `intent file <path>` first to see prior decisions (the PreToolUse hook also injects this
