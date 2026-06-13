@@ -60,6 +60,12 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
   default (`--no-commit-hook` to skip) by delegating to `intent install-commit-hook`; that hook now
   calls `node <abs>/dist/cli/main.js backfill` (PATH-independent, runs under Git-for-Windows bash).
 
+Path keys (`src/git/paths.ts`, `toRepoRelative`): every `file_path` is stored + queried as a
+canonical repo-relative POSIX key (forward slashes), normalised on write (capture + hook nudge)
+and read (`show`/`file`/`search --file`, resolved against cwd). Fixes Windows backslash mismatches;
+schema v2 migrates old rows. `getIntentLinesByFileLoose` adds a basename fallback so `intent file
+blob.ts` matches `src/git/blob.ts` when the exact key misses (exact always wins).
+
 Hooks (`intent-hook`): SessionStart → repo provenance summary; PreToolUse(edits) → existing intent
 for the target file; PostToolUse(edits) → nudge to `intent annotate`. Context injected via
 `hookSpecificOutput.additionalContext`; fail-safe (errors exit 0, never blocks the session). Paths

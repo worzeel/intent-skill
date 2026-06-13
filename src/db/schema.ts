@@ -68,6 +68,16 @@ export const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    up: (db) => {
+      // Canonicalise stored paths to repo-relative POSIX (forward slashes) so
+      // lookups match regardless of the OS that captured them. Pre-v2 rows from
+      // Windows captures used backslash separators. (SQLite string literals
+      // don't treat backslash as an escape, so '\' is a literal backslash.)
+      db.exec(`UPDATE intent_line SET file_path = REPLACE(file_path, '\\', '/')`);
+    },
+  },
 ];
 
 /** Highest migration version defined. */

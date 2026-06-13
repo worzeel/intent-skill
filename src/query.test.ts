@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTempRepo, type TempRepo } from "./test-helpers.js";
@@ -66,6 +66,32 @@ describe("getFileIntent", () => {
 
     const all = await getFileIntent(ctx(), "api.ts");
     expect(all.map((r) => r.intent.summary)).toEqual(["first", "third"]);
+  });
+
+  it("finds a nested file by bare basename when the exact key misses", async () => {
+    await mkdir(path.join(repo.root, "src", "git"), { recursive: true });
+    await write(path.join("src", "git", "blob.ts"), "anchor\n");
+    await annotateIntent(ctx(), {
+      file: "src/git/blob.ts",
+      lineStart: 1,
+      lineEnd: 1,
+      summary: "blob hashing",
+    });
+
+    // No exact match for "blob.ts", but the basename fallback finds it.
+    const byBase = await getFileIntent(ctx(), "blob.ts");
+    expect(byBase.map((r) => r.intent.summary)).toEqual(["blob hashing"]);
+  });
+
+  it("prefers an exact key over the basename fallback", async () => {
+    await write("blob.ts", "root\n");
+    await mkdir(path.join(repo.root, "src"), { recursive: true });
+    await write(path.join("src", "blob.ts"), "nested\n");
+    await annotateIntent(ctx(), { file: "blob.ts", lineStart: 1, lineEnd: 1, summary: "root one" });
+    await annotateIntent(ctx(), { file: "src/blob.ts", lineStart: 1, lineEnd: 1, summary: "nested one" });
+
+    const exact = await getFileIntent(ctx(), "src/blob.ts");
+    expect(exact.map((r) => r.intent.summary)).toEqual(["nested one"]);
   });
 });
 

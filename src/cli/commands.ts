@@ -20,6 +20,7 @@ import {
   type TranscriptBackfillResult,
 } from "../backfill-transcript.js";
 import { getGitDir } from "../git/repo.js";
+import { toRepoRelative } from "../git/paths.js";
 import { statSync, readdirSync } from "node:fs";
 import type { ParsedArgs } from "./parse.js";
 import {
@@ -135,7 +136,8 @@ async function show(
   const target = parsed.positionals[0];
   if (!target) throw new UsageError("usage: intent show <file>:<line>");
   const { file, line } = parseTarget(target);
-  return render(await getIntentAtLine(ctx, file, line), json);
+  const key = toRepoRelative(ctx.repoRoot, file, process.cwd());
+  return render(await getIntentAtLine(ctx, key, line), json);
 }
 
 async function fileLog(
@@ -145,7 +147,8 @@ async function fileLog(
 ): Promise<string> {
   const file = parsed.positionals[0];
   if (!file) throw new UsageError("usage: intent file <path>");
-  return render(await getFileIntent(ctx, file), json);
+  const key = toRepoRelative(ctx.repoRoot, file, process.cwd());
+  return render(await getFileIntent(ctx, key), json);
 }
 
 async function search(
@@ -155,7 +158,10 @@ async function search(
 ): Promise<string> {
   const query = parsed.positionals.join(" ").trim();
   if (!query) throw new UsageError("usage: intent search <query> [--file f] [--limit n]");
-  const file = typeof parsed.flags.file === "string" ? parsed.flags.file : undefined;
+  const file =
+    typeof parsed.flags.file === "string"
+      ? toRepoRelative(ctx.repoRoot, parsed.flags.file, process.cwd())
+      : undefined;
   const limit = optLimit(parsed.flags.limit);
   return render(await searchIntent(ctx, query, { file, limit }), json);
 }

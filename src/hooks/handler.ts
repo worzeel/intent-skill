@@ -1,8 +1,8 @@
 import path from "node:path";
-import { realpathSync } from "node:fs";
 import type { IntentDatabase } from "../db/connection.js";
 import { getRecentIntents, getStats } from "../db/intents.js";
 import { getFileIntent, type QueryContext } from "../query.js";
+import { toRepoRelative } from "../git/paths.js";
 
 /**
  * Claude Code hook logic — the deterministic harness glue around the `intent`
@@ -126,7 +126,7 @@ function isEditTool(toolName: string | undefined): boolean {
   return toolName !== undefined && EDIT_TOOLS.has(toolName);
 }
 
-/** Pull the target file from a tool input and make it relative to the repo root. */
+/** Pull the target file from a tool input and make it the canonical repo key. */
 export function relevantFile(
   repoRoot: string,
   toolInput: Record<string, unknown> | undefined,
@@ -134,24 +134,15 @@ export function relevantFile(
   const raw = toolInput?.["file_path"] ?? toolInput?.["notebook_path"];
   if (typeof raw !== "string" || raw.length === 0) return null;
 
-  // Resolve symlinks on both ends so a symlinked cwd (macOS /var -> /private/var)
-  // doesn't make a path inside the repo look like it escapes it. `git
-  // --show-toplevel` already resolves them; canonical() keeps the file in step.
-  const abs = path.isAbsolute(raw) ? canonical(raw) : raw;
-  const rel = path.isAbsolute(abs) ? path.relative(canonical(repoRoot), abs) : abs;
+  // Canonical repo-relative POSIX key — same form capture stores, so the nudge
+  // tells Claude the exact path that `intent file` will match. toRepoRelative
+  // resolves symlinks on both ends (a symlinked cwd like macOS /var ->
+  // /private/var won't look like it escapes the repo).
+  const key = toRepoRelative(repoRoot, raw);
 
-  // Outside the repo (or empty) — nothing we can anchor to.
-  if (rel.length === 0 || rel.startsWith("..")) return null;
-  return rel;
-}
-
-/** Resolve symlinks if the path exists; otherwise return it unchanged. */
-function canonical(p: string): string {
-  try {
-    return realpathSync(p);
-  } catch {
-    return p;
-  }
+  // Outside the repo — the fallback leaves an absolute path or a leading "..".
+  if (key.length === 0 || key.startsWith("..") || path.isAbsolute(key)) return null;
+  return key;
 }
 
 function wrap(hookEventName: string, additionalContext: string): HookOutput {

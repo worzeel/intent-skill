@@ -131,6 +131,29 @@ export function getIntentLinesByFile(db: IntentDatabase, filePath: string): Inte
   return rows.map(toIntentLine);
 }
 
+/**
+ * Lines for a file key, with a basename fallback: if nothing matches the exact
+ * repo-relative key, match any stored file with the same trailing name — so
+ * `intent file blob.ts` finds `src/git/blob.ts` without knowing the dir. Exact
+ * matches always win; the fallback only fires when the exact set is empty.
+ */
+export function getIntentLinesByFileLoose(db: IntentDatabase, fileKey: string): IntentLine[] {
+  const exact = getIntentLinesByFile(db, fileKey);
+  if (exact.length > 0) return exact;
+
+  const base = fileKey.split("/").pop() ?? fileKey;
+  // Escape LIKE metacharacters so a basename with % or _ stays literal.
+  const escaped = base.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const rows = db
+    .prepare(
+      `SELECT * FROM intent_line
+        WHERE file_path = ? OR file_path LIKE ? ESCAPE '\\'
+        ORDER BY rowid`,
+    )
+    .all(base, `%/${escaped}`) as IntentLineRow[];
+  return rows.map(toIntentLine);
+}
+
 export function getIntentsBySession(db: IntentDatabase, sessionId: string): Intent[] {
   const rows = db
     .prepare("SELECT * FROM intent WHERE session_id = ? ORDER BY created_at, rowid")

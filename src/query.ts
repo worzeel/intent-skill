@@ -4,7 +4,7 @@ import {
   getAllIntents,
   getIntent,
   getIntentLines,
-  getIntentLinesByFile,
+  getIntentLinesByFileLoose,
   getIntentsBySession,
   searchIntentIds,
 } from "./db/intents.js";
@@ -119,7 +119,7 @@ export async function getIntentAtLine(
   file: string,
   line: number,
 ): Promise<ResolvedIntent[]> {
-  const lines = getIntentLinesByFile(ctx.db, file);
+  const lines = getIntentLinesByFileLoose(ctx.db, file);
   const resolved = await Promise.all(lines.map((l) => resolveLine(ctx.repoRoot, l)));
   const matching = resolved.filter((r) => covers(r, line));
   return groupByIntent(ctx.db, matching);
@@ -133,7 +133,7 @@ export async function getFileIntent(
   ctx: QueryContext,
   file: string,
 ): Promise<ResolvedIntent[]> {
-  const lines = getIntentLinesByFile(ctx.db, file);
+  const lines = getIntentLinesByFileLoose(ctx.db, file);
   const resolved = await Promise.all(lines.map((l) => resolveLine(ctx.repoRoot, l)));
   const grouped = groupByIntent(ctx.db, resolved);
   return grouped.sort((a, b) => minStart(a) - minStart(b));

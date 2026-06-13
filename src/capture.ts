@@ -9,6 +9,7 @@ import {
   updateIntentDetail,
 } from "./db/intents.js";
 import { hashFile } from "./git/blob.js";
+import { toRepoRelative } from "./git/paths.js";
 
 /**
  * Capture service — the write-side business logic. Ties git blob resolution to
@@ -61,10 +62,14 @@ export async function annotateIntent(
   ctx: CaptureContext,
   params: AnnotateParams,
 ): Promise<AnnotateResult> {
-  const blobHash = await hashFile(ctx.repoRoot, params.file, { write: true });
+  // Store one canonical key (repo-relative, forward slashes) so queries match
+  // regardless of the capturing OS's separator. Writers pass repo-relative
+  // paths, so relative inputs resolve against the repo root.
+  const file = toRepoRelative(ctx.repoRoot, params.file);
+  const blobHash = await hashFile(ctx.repoRoot, file, { write: true });
   const fragment = await extractFragment(
     ctx.repoRoot,
-    params.file,
+    file,
     params.lineStart,
     params.lineEnd,
   );
@@ -88,7 +93,7 @@ export async function annotateIntent(
 
     const line = insertIntentLine(ctx.db, {
       intentId: resolvedIntentId,
-      filePath: params.file,
+      filePath: file,
       blobHash,
       lineStart: params.lineStart,
       lineEnd: params.lineEnd,

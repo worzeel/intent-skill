@@ -22,6 +22,10 @@ anchored to git blob hashes so it survives line drift. Run it from anywhere insi
 Add `--json` to any read command for machine-readable output; default is human text.
 Resolved line positions are recomputed at query time, so they stay correct after a file drifts.
 
+Paths are matched on a canonical repo-relative key (forward slashes, resolved from your cwd),
+so any separator works and you can pass a bare filename — `intent file blob.ts` finds
+`src/git/blob.ts` when the name is unambiguous.
+
 ## Capturing
 
 Capture is normally automatic — the PostToolUse hook nudges after a significant edit.
