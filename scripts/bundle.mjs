@@ -1,87 +1,123 @@
-#!/usr/bin/env node
-import { existsSync, mkdirSync, rmSync, cpSync, copyFileSync, writeFileSync } from "node:fs";
+#!/usr/bin/env bun
+import { spawnSync } from "node:child_process";
+import { mkdirSync, rmSync, copyFileSync, writeFileSync, chmodSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { ROOT, TARGETS, currentKey, compileBinary } from "./targets.mjs";
 
 /**
- * Assemble the droppable `intent` skill bundle. Run after `npm run build`:
+ * Assemble the droppable `intent` skill bundle around the compiled binary.
  *
- *   bundle/
- *     intent/
- *       SKILL.md        the /intent skill
- *       dist/           compiled JS (pure node:sqlite, no node_modules)
- *       install.mjs     one-shot setup (hooks + PATH shims + git hook)
- *       README.md       how to install
- *     intent-backfill/
- *       SKILL.md        the /intent-backfill skill (transcript → provenance)
+ *   bun run scripts/bundle.mjs            # current platform → bundle/
+ *   bun run scripts/bundle.mjs --release  # all targets → release/*.{tar.gz,zip}
  *
- * Copy each folder into a `.claude/skills/` dir (project or ~/.claude) and run
- * `node intent/install.mjs`. The intent-backfill skill drives the `intent` CLI,
- * so it needs no dist of its own.
+ * The bundle is two skill folders you drop into a `.claude/skills/` dir:
+ *
+ *   intent/            SKILL.md + the `intent` binary + README
+ *   intent-backfill/   SKILL.md only (it drives the `intent` CLI)
+ *
+ * Then run the binary's own installer:  `intent install`  (see README).
  */
 
 const README = `# intent — code provenance skill
 
 Drop-in skill for Claude Code. Captures *why* code was written, anchored to git
-blob hashes, in a per-repo SQLite db (\`.git/intent.db\`). Pure JS via node's
-built-in \`node:sqlite\` — no native build, no dependencies.
+blob hashes, in a per-repo SQLite db (\`.git/intent.db\`). Ships as a single
+self-contained binary (Bun-compiled) — no Node, no dependencies, no flags.
 
 ## Install
 
 1. Copy both skill folders into a \`.claude/skills/\` directory (\`~/.claude/skills/\`
    for all repos, or \`<project>/.claude/skills/\` for one repo):
-   - \`intent/\` — the CLI, hooks, installer, and the \`/intent\` skill.
+   - \`intent/\` — the binary, README, and the \`/intent\` skill.
    - \`intent-backfill/\` — the \`/intent-backfill\` skill (reconstruct provenance
-     from past session transcripts). Drives the \`intent\` CLI, so no dist of its own.
-2. From the \`intent/\` folder, run the installer:
+     from past session transcripts). Drives the \`intent\` binary, so no binary of its own.
+
+2. **macOS/Linux only** — make the binary executable (and clear the macOS
+   download quarantine, which otherwise blocks unsigned binaries):
 
    \`\`\`sh
-   node install.mjs              # hooks into ~/.claude (all repos)
-   node install.mjs --project    # hooks into ./.claude (this repo only)
-   node install.mjs --dry-run    # preview, change nothing
-   node install.mjs --no-commit-hook   # skip the post-commit git hook
+   chmod +x intent/intent
+   xattr -d com.apple.quarantine intent/intent 2>/dev/null || true   # macOS only
    \`\`\`
 
-This (1) drops \`intent\` + \`intent-hook\` shims on PATH (~/.local/bin), (2) wires
-the SessionStart / PreToolUse / PostToolUse Claude Code hooks, and (3) installs a
-post-commit git hook in the current repo that backfills \`commit_hash\` (skip with
-\`--no-commit-hook\`).
+3. Run the binary's installer from the \`intent/\` folder:
 
-**Cross-platform.** Claude Code hooks run as direct \`node\` invocations, so they
-fire on macOS, Linux *and* Windows (a POSIX shim can't be executed by cmd.exe /
-PowerShell). On Windows the installer also writes \`intent.cmd\` + \`intent.ps1\`
-alongside the POSIX shim so a bare \`intent\` resolves in cmd.exe and PowerShell.
+   \`\`\`sh
+   ./intent install                 # hooks into ~/.claude (all repos)
+   ./intent install --project       # hooks into ./.claude (this repo only)
+   ./intent install --dry-run       # preview, change nothing
+   ./intent install --no-commit-hook   # skip the post-commit git hook
+   \`\`\`
+
+   On Windows: \`.\\intent.exe install\`.
+
+This (1) wires the SessionStart / PreToolUse / PostToolUse Claude Code hooks at
+the binary's absolute path (no PATH shims — fires on macOS, Linux and Windows),
+and (2) installs a post-commit git hook in the current repo that backfills
+\`commit_hash\` (skip with \`--no-commit-hook\`).
+
+To run \`intent\` from your own terminal, add the folder to PATH or symlink the
+binary into one (the installer prints the exact command).
 
 **Heads up:** the PostToolUse hook only *nudges* Claude to run \`intent annotate\`
 — it does not write to the db automatically. Provenance is captured when Claude
 (or you) actually runs the annotate command. See \`SKILL.md\` for usage.
 `;
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const out = path.join(root, "bundle", "intent");
+/** Build into `<stage>/intent/` + `<stage>/intent-backfill/` for one target. */
+function assembleInto(stage, key) {
+  const intentDir = path.join(stage, "intent");
+  rmSync(intentDir, { recursive: true, force: true });
+  mkdirSync(intentDir, { recursive: true });
 
-const dist = path.join(root, "dist");
-if (!existsSync(path.join(dist, "cli", "main.js"))) {
-  process.stderr.write("bundle: dist/ missing — run `npm run build` first.\n");
-  process.exit(1);
+  copyFileSync(path.join(ROOT, "skill", "SKILL.md"), path.join(intentDir, "SKILL.md"));
+  writeFileSync(path.join(intentDir, "README.md"), README);
+  const binOut = path.join(intentDir, `intent${TARGETS[key].ext}`);
+  compileBinary(key, binOut);
+  if (TARGETS[key].ext === "") chmodSync(binOut, 0o755);
+
+  const backfillDir = path.join(stage, "intent-backfill");
+  rmSync(backfillDir, { recursive: true, force: true });
+  mkdirSync(backfillDir, { recursive: true });
+  copyFileSync(
+    path.join(ROOT, "skill", "intent-backfill", "SKILL.md"),
+    path.join(backfillDir, "SKILL.md"),
+  );
 }
 
-rmSync(path.join(root, "bundle"), { recursive: true, force: true });
-mkdirSync(out, { recursive: true });
+/** Archive the two skill folders inside `stage` → release/intent-skill-<key>.<ext>. */
+function archive(stage, key) {
+  const releaseDir = path.join(ROOT, "release");
+  mkdirSync(releaseDir, { recursive: true });
+  const isWin = key.startsWith("windows");
+  const out = path.join(releaseDir, `intent-skill-${key}.${isWin ? "zip" : "tar.gz"}`);
+  rmSync(out, { force: true });
 
-cpSync(dist, path.join(out, "dist"), { recursive: true });
-copyFileSync(path.join(root, "skill", "SKILL.md"), path.join(out, "SKILL.md"));
-copyFileSync(path.join(root, "scripts", "install.mjs"), path.join(out, "install.mjs"));
-writeFileSync(path.join(out, "README.md"), README);
+  const res = isWin
+    ? spawnSync("zip", ["-r", "-q", out, "intent", "intent-backfill"], { cwd: stage, stdio: "inherit" })
+    : spawnSync("tar", ["-czf", out, "-C", stage, "intent", "intent-backfill"], { stdio: "inherit" });
+  if (res.status !== 0) {
+    process.stderr.write(`archive failed for ${key} (need ${isWin ? "zip" : "tar"} on PATH)\n`);
+    process.exit(res.status ?? 1);
+  }
+  return path.relative(ROOT, out);
+}
 
-// Second skill: intent-backfill (SKILL.md only — it drives the intent CLI).
-const backfillOut = path.join(root, "bundle", "intent-backfill");
-mkdirSync(backfillOut, { recursive: true });
-copyFileSync(
-  path.join(root, "skill", "intent-backfill", "SKILL.md"),
-  path.join(backfillOut, "SKILL.md"),
-);
+const release = process.argv.includes("--release");
 
-process.stdout.write(
-  `Bundle assembled at ${path.relative(root, path.join(root, "bundle"))}/ (intent/, intent-backfill/)\n`,
-);
+if (release) {
+  const stage = path.join(ROOT, "release", ".stage");
+  const made = [];
+  for (const key of Object.keys(TARGETS)) {
+    assembleInto(stage, key);
+    made.push(archive(stage, key));
+  }
+  rmSync(stage, { recursive: true, force: true });
+  process.stdout.write(`\nPackaged ${made.length} release archives:\n` + made.map((m) => "  " + m).join("\n") + "\n");
+} else {
+  const bundle = path.join(ROOT, "bundle");
+  rmSync(bundle, { recursive: true, force: true });
+  mkdirSync(bundle, { recursive: true });
+  assembleInto(bundle, currentKey());
+  process.stdout.write(`\nBundle assembled at bundle/ (intent/, intent-backfill/)\n`);
+}
