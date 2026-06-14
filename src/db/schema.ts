@@ -1,8 +1,8 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { Database } from "bun:sqlite";
 
 export interface Migration {
   version: number;
-  up: (db: DatabaseSync) => void;
+  up: (db: Database) => void;
 }
 
 /**

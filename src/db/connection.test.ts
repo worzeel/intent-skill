@@ -1,6 +1,6 @@
 import path from "node:path";
 import { realpath } from "node:fs/promises";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { makeTempRepo, type TempRepo } from "../test-helpers.js";
 import { LATEST_SCHEMA_VERSION } from "./schema.js";
 import {

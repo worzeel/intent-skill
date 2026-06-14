@@ -4,113 +4,84 @@ AI code provenance tracking for Claude Code. Captures **why** code was written �
 the decision, the workaround, the tradeoff — anchored to git **blob hashes** so it
 survives line drift. Stored in a per-repo SQLite db at `.git/intent.db`.
 
-Pure JS over node's built-in `node:sqlite` — **no native build, no runtime deps**.
+Ships as a single **Bun-compiled binary** (`bun:sqlite` built in) — **no Node, no
+dependencies, no flags**. Just drop the binary in and run it.
 
 ---
 
 ## Quick start
 
-This repo is the **source**. You build a droppable bundle from it, then install
-that bundle into any project (or globally) where you want provenance tracking.
+Get the two skill folders (`intent/` + `intent-backfill/`), drop them into a
+`.claude/skills/` dir, then run the binary's own installer. Two ways to get them:
 
-### 1. Build the bundle
+### Option A — download a release
 
-```sh
-npm install
-npm run bundle      # runs the build, then assembles bundle/intent/
-```
-
-That produces:
-
-```
-bundle/
-├── intent/                the /intent skill + everything it needs
-│   ├── SKILL.md
-│   ├── dist/              compiled JS (zero node_modules)
-│   ├── install.mjs        one-shot setup (hooks + CLI shims + git hook)
-│   └── README.md          install notes
-└── intent-backfill/       the /intent-backfill skill (transcript → provenance)
-    └── SKILL.md            (drives the intent CLI, so no dist of its own)
-```
-
-### 2. Drop it into a `.claude/` skills directory
-
-Copy the **`bundle/intent/`** folder into a `.claude/skills/` dir — either:
-
-- **`~/.claude/skills/intent/`** — available in *all* your repos, or
-- **`<your-project>/.claude/skills/intent/`** — just that one repo.
+Grab `intent-skill-<platform>.{tar.gz,zip}` from
+[Releases](../../releases) for your OS/arch (e.g. `darwin-arm64`, `linux-x64`,
+`windows-x64`) and extract it into a `.claude/skills/` dir:
 
 ```sh
-# global (all repos) — copy both skill folders
-mkdir -p ~/.claude/skills
+mkdir -p ~/.claude/skills        # all repos (or <project>/.claude/skills for one)
+tar -xzf intent-skill-darwin-arm64.tar.gz -C ~/.claude/skills
+# Windows: unzip intent-skill-windows-x64.zip into the skills dir
+```
+
+### Option B — build from source
+
+Needs [Bun](https://bun.sh). Produces a binary for *your current OS*:
+
+```sh
+bun install
+bun run bundle                   # → bundle/intent/ + bundle/intent-backfill/
 cp -R bundle/intent bundle/intent-backfill ~/.claude/skills/
-
-# …or per-project
-mkdir -p /path/to/your-project/.claude/skills
-cp -R bundle/intent bundle/intent-backfill /path/to/your-project/.claude/skills/
 ```
 
-(`intent-backfill` is optional — it's the provenance-recovery skill. The core
-tool works with just `intent/`.)
-
-### 3. Run the installer
-
-From inside the folder you just copied:
+### Then: make it executable + install
 
 ```sh
-cd ~/.claude/skills/intent      # or <project>/.claude/skills/intent
-node install.mjs                # wire hooks into ~/.claude (all repos)
+cd ~/.claude/skills/intent       # or <project>/.claude/skills/intent
+
+# macOS/Linux only: mark executable + clear the macOS download quarantine
+chmod +x intent
+xattr -d com.apple.quarantine intent 2>/dev/null || true   # macOS, downloaded binaries
+
+./intent install                 # wire hooks into ~/.claude (all repos)
 
 # variants:
-node install.mjs --project          # wire into ./.claude (this repo only)
-node install.mjs --dry-run          # preview, change nothing
-node install.mjs --no-commit-hook   # skip the post-commit git hook
+./intent install --project          # wire into ./.claude (this repo only)
+./intent install --dry-run          # preview, change nothing
+./intent install --no-commit-hook   # skip the post-commit git hook
 ```
 
-The installer is idempotent — re-run it any time (e.g. after rebuilding the
-bundle) and it self-heals.
-
-### 4. Make sure `intent` is on your PATH
-
-The installer drops the `intent` CLI shim in `~/.local/bin` by default. If that's
-not on your PATH, it'll print exactly what to add. (`--bin-dir DIR` to put it
-elsewhere.)
+On Windows: `.\intent.exe install`. The installer is idempotent — re-run it any
+time and it self-heals. To run `intent` from your own terminal, add the folder to
+PATH or symlink the binary (the installer prints the exact command).
 
 That's it. Open Claude Code in a git repo and provenance is now wired.
 
 ---
 
-## What the installer actually does
+## What `intent install` actually does
 
-1. **CLI shims** — drops `intent` + `intent-hook` on PATH so you (and Claude) can
-   run `intent …` at a shell.
-2. **Claude Code hooks** — merges three hooks into `settings.json` as direct
-   `node` invocations:
+1. **Claude Code hooks** — merges three hooks into `settings.json`, each invoking
+   the binary at its absolute path (`"<binary>" hook`) — no PATH shims, so they
+   fire on macOS, Linux *and* Windows:
    | Event | Behaviour |
    |-------|-----------|
    | `SessionStart` | Injects a short repo provenance summary. |
    | `PreToolUse` (edits) | Injects existing provenance for the file about to be edited, so Claude doesn't re-solve prior decisions. |
    | `PostToolUse` (edits) | **Nudges** Claude to capture *why* via `intent annotate`. |
-3. **Post-commit git hook** — installs a fail-safe `post-commit` hook in the
+2. **Post-commit git hook** — installs a fail-safe `post-commit` hook in the
    current repo that backfills `commit_hash` onto captured intents (never blocks a
-   commit). Skip with `--no-commit-hook`.
+   commit). Skip with `--no-commit-hook`; soft-skipped outside a git repo.
 
 > **Note:** the PostToolUse hook only *nudges* — it does **not** write to the db
 > automatically. Provenance is recorded when Claude (or you) actually runs
 > `intent annotate`. That's by design: only Claude can synthesise the *why*.
 
----
-
-## Cross-platform (macOS / Linux / Windows)
-
-One bundle, every platform — same `node install.mjs` command:
-
-- **macOS / Linux** — POSIX `#!/bin/sh` shims; hooks call `node` directly.
-- **Windows** — hooks call `node` directly too (a no-extension POSIX shim can't be
-  run by cmd.exe / PowerShell), and the installer additionally writes `intent.cmd`
-  + `intent.ps1` so a bare `intent` resolves in cmd.exe and PowerShell. The
-  post-commit git hook stays `#!/bin/sh` — Git for Windows runs hooks through its
-  own bundled bash regardless of OS.
+Because the hooks and the git hook point at the binary's absolute path, they're
+fully PATH-independent — they even fire from GUI git clients (Fork, Rider,
+SourceTree…) that don't source your shell's environment.
 
 ---
 
@@ -156,12 +127,19 @@ for the hook wiring details.
 
 ## Development
 
+Needs [Bun](https://bun.sh).
+
 ```sh
-npm test          # vitest (runs with --experimental-sqlite)
-npm run typecheck # tsc --noEmit
-npm run build     # → dist/
-npm run bundle    # build + assemble bundle/intent/
+bun test           # bun test
+bun run typecheck  # tsc --noEmit
+bun run build      # → bin/intent[.exe] (current OS)
+bun run build:all  # → release/ (all 5 targets)
+bun run bundle     # build + assemble bundle/intent/ + bundle/intent-backfill/
+bun run bundle --release   # cross-compile + package release/*.{tar.gz,zip}
 ```
+
+Releases are cut by tagging (`git tag v0.2.0 && git push --tags`) — see
+[`.github/workflows/release.yml`](.github/workflows/release.yml).
 
 This repo builds the bundle but **doesn't run intent on itself** (no hooks; the
 skill source lives in `skill/`). See [`CLAUDE.md`](CLAUDE.md) for architecture and

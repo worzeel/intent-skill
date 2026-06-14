@@ -1,7 +1,10 @@
 # Plan — Pivot from MCP server to a droppable `intent` skill
 
-> Status: in progress (Phases 1–3 done). Supersedes milestones M5–M7 in
-> [mcp-intent-spec.md](mcp-intent-spec.md).
+> Status: **complete** (historical record). The runtime/distribution decisions below
+> (`node:sqlite`, `install.mjs`, PATH shims) were later superseded by the Bun migration —
+> see [bun-migration-plan.md](bun-migration-plan.md): `bun:sqlite`, a single compiled binary,
+> and self-install via `intent install`.
+> Originally superseded milestones M5–M7 in [mcp-intent-spec.md](mcp-intent-spec.md).
 >
 > Decisions:
 > - Drop the MCP server entirely; rename `mcp-intent` → `intent`.

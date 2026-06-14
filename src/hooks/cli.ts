@@ -1,51 +1,13 @@
 #!/usr/bin/env node
-import { openIntentDbForCwd } from "../db/connection.js";
-import { getRepoRoot, isGitRepo } from "../git/repo.js";
-import { handleHook, type HookInput } from "./handler.js";
+import { runHook } from "./run.js";
 
 /**
- * Entry point for Claude Code hooks. Reads the hook event JSON on stdin,
- * resolves intent context, and prints a `hookSpecificOutput` JSON object on
- * stdout for Claude Code to inject.
+ * Legacy entry point for Claude Code hooks (`intent-hook`). The compiled binary
+ * exposes the same thing as `intent hook`; both delegate to {@link runHook}.
  *
  * Hooks must never break the session: any failure exits 0 with no output.
- * Configure the same command for SessionStart / PreToolUse / PostToolUse — it
- * branches on `hook_event_name` itself.
  */
-async function main(): Promise<void> {
-  const input = await readInput();
-  const cwd = typeof input.cwd === "string" && input.cwd ? input.cwd : process.cwd();
-
-  if (!(await isGitRepo(cwd))) return;
-
-  const repoRoot = await getRepoRoot(cwd);
-  const db = await openIntentDbForCwd(cwd);
-
-  try {
-    const output = await handleHook({ db, repoRoot }, input);
-    if (output.hookSpecificOutput) {
-      process.stdout.write(JSON.stringify(output));
-    }
-  } finally {
-    db.close();
-  }
-}
-
-async function readInput(): Promise<HookInput> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as HookInput;
-  } catch {
-    return {};
-  }
-}
-
-main().catch((error) => {
+runHook().catch((error) => {
   // Never break the session — log to stderr and exit clean.
   console.error("intent-hook:", error instanceof Error ? error.message : error);
   process.exit(0);
