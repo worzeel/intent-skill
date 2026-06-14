@@ -20,8 +20,9 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "bundle": "npm run build && node scripts/bundle.mjs",
+    "build": "bun run scripts/build.mjs",
+    "build:all": "bun run scripts/build.mjs --all",
+    "bundle": "bun run scripts/bundle.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "bun test --timeout 20000",
     "test:watch": "bun test --watch --timeout 20000"
