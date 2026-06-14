@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { makeTempRepo, type TempRepo } from "../test-helpers.js";
 import { runGit } from "./exec.js";
 import { blameLine, parseBlamePorcelain } from "./blame.js";

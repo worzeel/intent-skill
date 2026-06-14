@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { mergeHooks, shimContent, shimCmd, shimPs1, hookCommand } from "./install.mjs";
 
 const CMD = "/home/u/.local/bin/intent-hook";

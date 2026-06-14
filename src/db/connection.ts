@@ -31,6 +31,11 @@ export function openIntentDb(dbPath: string, opts: OpenOptions = {}): IntentData
   const readonly = opts.readonly ?? false;
   const db = new Database(dbPath, { readonly, strict: true });
 
+  // bun:sqlite (like SQLite itself) leaves foreign keys OFF per connection —
+  // unlike node:sqlite, which enabled them by default. Turn them on so
+  // `intent_line`'s ON DELETE CASCADE fires.
+  db.exec("PRAGMA foreign_keys = ON");
+
   if (!readonly) {
     db.exec("PRAGMA journal_mode = WAL");
     migrate(db);
