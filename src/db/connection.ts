@@ -1,15 +1,15 @@
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { Database } from "bun:sqlite";
 import { getGitDir } from "../git/repo.js";
 import { migrations } from "./schema.js";
 
 /**
- * SQLite via node's built-in `node:sqlite` (DatabaseSync) — synchronous, no
- * native module to compile, no runtime dependency. Keeps the whole tool pure JS
- * so it ships as a droppable skill bundle. Foreign keys are on by default
- * (`enableForeignKeyConstraints`).
+ * SQLite via Bun's built-in `bun:sqlite` (Database) — synchronous, no native
+ * module to compile, no runtime dependency. Keeps the whole tool self-contained
+ * so it ships as a single compiled binary. Opened in `strict` mode so bare-key
+ * named params (`@id` ⇢ `{ id }`) bind correctly and missing params throw.
  */
-export type IntentDatabase = DatabaseSync;
+export type IntentDatabase = Database;
 
 export interface OpenOptions {
   /** Open read-only. Skips WAL + migrations (a read-only handle can't write). */
@@ -29,7 +29,7 @@ export async function resolveDbPath(cwd: string): Promise<string> {
  */
 export function openIntentDb(dbPath: string, opts: OpenOptions = {}): IntentDatabase {
   const readonly = opts.readonly ?? false;
-  const db = new DatabaseSync(dbPath, { readOnly: readonly });
+  const db = new Database(dbPath, { readonly, strict: true });
 
   if (!readonly) {
     db.exec("PRAGMA journal_mode = WAL");
@@ -74,9 +74,9 @@ export function getUserVersion(db: IntentDatabase): number {
 }
 
 /**
- * Run `fn` inside a transaction. node:sqlite has no `db.transaction()` helper
- * (unlike better-sqlite3), so we drive BEGIN/COMMIT/ROLLBACK by hand. Rethrows
- * after rolling back on failure.
+ * Run `fn` inside a transaction. We drive BEGIN/COMMIT/ROLLBACK by hand rather
+ * than using bun:sqlite's `db.transaction()` helper, so the same code path works
+ * for arbitrary `fn`. Rethrows after rolling back on failure.
  */
 export function transaction<T>(db: IntentDatabase, fn: () => T): T {
   db.exec("BEGIN");

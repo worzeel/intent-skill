@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import type { SQLOutputValue } from "node:sqlite";
 import type { IntentDatabase } from "./connection.js";
 import type { Intent, IntentLine } from "../types.js";
 
@@ -9,10 +8,13 @@ import type { Intent, IntentLine } from "../types.js";
  * just touch the base tables.
  */
 
-// Index signature lets these double as node:sqlite bind params and as the cast
-// target for its `Record<string, SQLOutputValue>` query results.
+/** The set of value types SQLite columns yield / bind params accept. */
+type SqlValue = string | number | bigint | Uint8Array | null;
+
+// Index signature lets these double as bun:sqlite bind params (strict mode) and
+// as the cast target for query results.
 interface IntentRow {
-  [column: string]: SQLOutputValue;
+  [column: string]: SqlValue;
   id: string;
   session_id: string | null;
   summary: string;
@@ -22,7 +24,7 @@ interface IntentRow {
 }
 
 interface IntentLineRow {
-  [column: string]: SQLOutputValue;
+  [column: string]: SqlValue;
   id: string;
   intent_id: string;
   file_path: string;
