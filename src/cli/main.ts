@@ -2,6 +2,7 @@
 import { openIntentDbForCwd } from "../db/connection.js";
 import { getRepoRoot, isGitRepo } from "../git/repo.js";
 import { runHook } from "../hooks/run.js";
+import { runInstall } from "./install.js";
 import { parseArgs } from "./parse.js";
 import { runCommand, helpText, UsageError } from "./commands.js";
 
@@ -65,6 +66,20 @@ if (process.argv[2] === "hook") {
     .catch((error) => {
       console.error("intent-hook:", error instanceof Error ? error.message : error);
       process.exit(0);
+    });
+} else if (process.argv[2] === "install") {
+  // `intent install` wires hooks + the git hook. It works outside a git repo
+  // (global installs), so it bypasses main()'s repo/db requirement.
+  runInstall(process.argv.slice(3))
+    .then((out) => {
+      process.stdout.write(out.endsWith("\n") ? out : out + "\n");
+      process.exit(0);
+    })
+    .catch((error) => {
+      process.stderr.write(
+        `intent: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      process.exit(1);
     });
 } else {
   main()
