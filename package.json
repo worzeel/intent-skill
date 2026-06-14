@@ -4,21 +4,6 @@
   "description": "AI code provenance tracking for Claude Code — captures why code was written, anchored to git blob hashes.",
   "type": "module",
   "license": "MIT",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "intent": "dist/cli/main.js",
-    "intent-hook": "dist/hooks/cli.js"
-  },
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "build": "bun run scripts/build.mjs",
     "build:all": "bun run scripts/build.mjs --all",

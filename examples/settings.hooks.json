@@ -1,20 +1,21 @@
 {
+  "_comment": "Illustrative only — `intent install` writes these automatically with the binary's real absolute path. The command is the binary itself plus the `hook` subcommand; quote the path if it contains spaces.",
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [{ "type": "command", "command": "intent-hook" }]
+        "hooks": [{ "type": "command", "command": "/abs/path/.claude/skills/intent/intent hook" }]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "intent-hook" }]
+        "hooks": [{ "type": "command", "command": "/abs/path/.claude/skills/intent/intent hook" }]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "intent-hook" }]
+        "hooks": [{ "type": "command", "command": "/abs/path/.claude/skills/intent/intent hook" }]
       }
     ]
   }
