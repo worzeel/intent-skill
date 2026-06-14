@@ -300,17 +300,28 @@ function resolveTranscriptFiles(repoRoot: string, arg: string | undefined): stri
 const COMMIT_HOOK_MARKER = "# intent backfill hook";
 
 /**
- * Build the post-commit hook body. It calls node directly against this CLI's
- * absolute entry (not a bare `intent` on PATH) so it works even where the shim
- * isn't resolvable — notably git-bash on Windows, which runs `#!/bin/sh` hooks
- * but has its own PATH. Forward-slash the path so git-bash is happy on Windows.
+ * Build the post-commit hook body. It pins BOTH the node binary and the CLI
+ * entry to absolute paths captured at install time, so the hook is fully
+ * PATH-independent.
+ *
+ * Why the node path matters: a bare `node` resolves through PATH, but GUI git
+ * clients (Fork, Rider, SourceTree, VS Code…) don't source the shell's
+ * nvm/fnm/asdf init, so a version-managed `node` isn't on their PATH — the hook
+ * fires, can't find node, and `|| true` silently swallows it. Baking in
+ * `process.execPath` (the node that ran the install) fixes that. We still fall
+ * back to a PATH `node` if that exact binary later disappears (e.g. the nvm
+ * version got uninstalled). Forward-slash both paths so git-bash is happy on
+ * Windows.
  */
 function commitHookScript(): string {
   const entry = fileURLToPath(new URL("./main.js", import.meta.url)).replace(/\\/g, "/");
+  const node = process.execPath.replace(/\\/g, "/");
   return (
     "#!/bin/sh\n" +
     `${COMMIT_HOOK_MARKER} — stamp commit_hash onto captured intents (never blocks a commit)\n` +
-    `node --experimental-sqlite --no-warnings "${entry}" backfill >/dev/null 2>&1 || true\n`
+    `NODE="${node}"\n` +
+    `[ -x "$NODE" ] || NODE=node\n` +
+    `"$NODE" --experimental-sqlite --no-warnings "${entry}" backfill >/dev/null 2>&1 || true\n`
   );
 }
 

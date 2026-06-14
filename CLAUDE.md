@@ -57,8 +57,10 @@ CLI-pivot plan ([specs/cli-pivot-plan.md](specs/cli-pivot-plan.md)):
   (not the no-extension POSIX shim, which cmd.exe/PowerShell can't run) so they fire on Windows too.
   On win32 it also writes `intent.cmd` + `intent.ps1` next to the POSIX shim (`.PS1` isn't in PATHEXT,
   so `.cmd` is what makes a bare `intent` resolve in PowerShell). Installs the post-commit git hook by
-  default (`--no-commit-hook` to skip) by delegating to `intent install-commit-hook`; that hook now
-  calls `node <abs>/dist/cli/main.js backfill` (PATH-independent, runs under Git-for-Windows bash).
+  default (`--no-commit-hook` to skip) by delegating to `intent install-commit-hook`; that hook
+  pins **both** the node binary (`process.execPath`, falling back to PATH `node` if it vanishes)
+  and `<abs>/dist/cli/main.js`, so it's fully PATH-independent — fires from GUI git clients (Fork,
+  Rider, SourceTree…) that don't source the shell's nvm/fnm init, and under Git-for-Windows bash.
 
 Path keys (`src/git/paths.ts`, `toRepoRelative`): every `file_path` is stored + queried as a
 canonical repo-relative POSIX key (forward slashes), normalised on write (capture + hook nudge)
