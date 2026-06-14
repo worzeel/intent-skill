@@ -12,7 +12,7 @@ anchored to git blob hashes so it survives line drift. Run it from anywhere insi
 
 | Need | Command |
 |---|---|
-| Why does this line exist? | `intent show <file>:<line>` |
+| Why does this line exist? | `intent show <file>:<line>` (falls back to `git blame` when nothing's recorded) |
 | Full provenance for a file | `intent file <path>` (alias: `intent log <path>`) |
 | Search by topic | `intent search "<terms>" [--file <f>] [--limit <n>]` |
 | What did a session do? | `intent session <session-id>` |
@@ -28,8 +28,9 @@ so any separator works and you can pass a bare filename — `intent file blob.ts
 
 ## Capturing
 
-Capture is normally automatic — the PostToolUse hook nudges after a significant edit.
-To record manually, pipe a JSON payload to stdin. Use a **quoted heredoc** (`<<'EOF'`) so
+Capture is **not** automatic — the PostToolUse hook only *nudges* after a significant edit; the
+actual write happens when you (or the user) run `intent annotate`. Capture as you go, or in one
+pass at the end of a task while the reasoning is still in context. Pipe a JSON payload to stdin. Use a **quoted heredoc** (`<<'EOF'`) so
 multiline detail, quotes and apostrophes pass through without shell mangling, and so the
 command still starts with `intent` for permission allow-listing:
 
@@ -53,6 +54,26 @@ Optional: `detail`, `task_ref`, `intent_id`, `session_id`.
 - **Record**: new functions, changed business logic, architectural decisions, workarounds,
   anything with a non-obvious reason.
 - **Skip**: formatting, whitespace, import reordering, generated files, trivial renames.
+
+Capture one **change/decision per intent**, scoped to a **tight line range** (a function, a
+block — not the whole file). The anchor re-locates by matching that range's text, so a narrow
+range survives edits elsewhere and `intent show <file>:<line>` can attribute each line to the
+*right* decision. One fat whole-file intent breaks the moment anything in it changes (it drifts
+and stops resolving), and makes every line answer the same useless "initial implementation".
+
+## Append-only history — never edit the database
+
+Intents are an **append-only provenance log**. Multiple intents for the same file or line over
+time is **expected and correct** — it's the reasoning evolving across edits.
+
+- **Never** delete, overwrite, or hand-edit `.git/intent.db` (no `sqlite3`, no raw SQL). There is
+  no delete command on purpose.
+- A newer intent for a region does **not** make an older one a duplicate to remove — the old one
+  is the *history of why it used to be that way*. `intent file <path>` labels these as
+  `# current` vs `# superseded`; superseded entries (`"superseded": true` in `--json`) are kept
+  deliberately. Leave them.
+- Correcting or extending a prior intent? Add a new intent, or `intent update` to append detail —
+  don't destroy what's there.
 
 ## What to capture (the rationale, not the instruction)
 

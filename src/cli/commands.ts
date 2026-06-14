@@ -21,10 +21,13 @@ import {
 } from "../backfill-transcript.js";
 import { getGitDir } from "../git/repo.js";
 import { toRepoRelative } from "../git/paths.js";
+import { blameLine } from "../git/blame.js";
 import { statSync, readdirSync } from "node:fs";
 import type { ParsedArgs } from "./parse.js";
 import {
+  formatFileIntents,
   formatIntents,
+  formatShowFallback,
   formatStats,
   serializeIntent,
   serializeIntents,
@@ -137,7 +140,29 @@ async function show(
   if (!target) throw new UsageError("usage: intent show <file>:<line>");
   const { file, line } = parseTarget(target);
   const key = toRepoRelative(ctx.repoRoot, file, process.cwd());
-  return render(await getIntentAtLine(ctx, key, line), json);
+
+  const resolved = await getIntentAtLine(ctx, key, line);
+  if (resolved.length > 0) return render(resolved, json);
+
+  // No recorded intent for this line — fall back to git blame so the caller
+  // still gets the last-touching commit without re-reading the code.
+  const blame = await blameLine(ctx.repoRoot, key, line);
+  if (json) {
+    return JSON.stringify({
+      intents: [],
+      source: blame ? "git-blame" : "none",
+      blame: blame
+        ? {
+            commit_hash: blame.commitHash,
+            summary: blame.summary,
+            author: blame.author,
+            author_time: blame.authorTime,
+            uncommitted: blame.uncommitted,
+          }
+        : null,
+    });
+  }
+  return formatShowFallback(key, line, blame);
 }
 
 async function fileLog(
@@ -148,7 +173,10 @@ async function fileLog(
   const file = parsed.positionals[0];
   if (!file) throw new UsageError("usage: intent file <path>");
   const key = toRepoRelative(ctx.repoRoot, file, process.cwd());
-  return render(await getFileIntent(ctx, key), json);
+  const resolved = await getFileIntent(ctx, key);
+  // File view splits current vs superseded so multi-edit history reads as
+  // history, not duplicates. Other read commands use the flat formatter.
+  return json ? JSON.stringify(serializeIntents(resolved)) : formatFileIntents(resolved);
 }
 
 async function search(
@@ -382,7 +410,7 @@ export function helpText(): string {
     "intent — AI code provenance, anchored to git blob hashes.",
     "",
     "Usage:",
-    "  intent show <file>:<line>            intent covering a current line",
+    "  intent show <file>:<line>            intent covering a current line (falls back to git blame)",
     "  intent file <path>                   full provenance for a file (alias: log)",
     "  intent search <query> [--file f] [--limit n]",
     "  intent session <session-id>          what a session did + why",

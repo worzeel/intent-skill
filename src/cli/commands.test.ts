@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeTempRepo, type TempRepo } from "../test-helpers.js";
+import { runGit } from "../git/exec.js";
 import { openIntentDb, type IntentDatabase } from "../db/connection.js";
 import type { CaptureContext } from "../capture.js";
 import { parseArgs } from "./parse.js";
@@ -122,6 +123,96 @@ describe("read commands", () => {
     expect(out).toContain("Add retry logic");
     expect(out).toContain("why: because the API flakes");
     expect(out).toContain("a.ts");
+  });
+});
+
+describe("show — git blame fallback", () => {
+  async function commit(rel: string, content: string, msg: string): Promise<void> {
+    await write(rel, content);
+    await runGit(["add", rel], { cwd: repo.root });
+    await runGit(["commit", "-q", "-m", msg], { cwd: repo.root });
+  }
+
+  it("falls back to the last-touching commit when no intent covers the line", async () => {
+    await commit("b.ts", "line one\nline two\n", "add b.ts");
+    const out = await run(["show", "b.ts:1"]);
+    expect(out).toContain("No recorded intent for b.ts:1");
+    expect(out).toContain("git blame");
+    expect(out).toContain("add b.ts");
+  });
+
+  it("--json reports the blame source and commit", async () => {
+    await commit("b.ts", "x\n", "add b.ts");
+    const parsed = JSON.parse(await run(["show", "b.ts:1", "--json"])) as {
+      intents: unknown[];
+      source: string;
+      blame: { summary: string; commit_hash: string } | null;
+    };
+    expect(parsed.intents).toHaveLength(0);
+    expect(parsed.source).toBe("git-blame");
+    expect(parsed.blame?.summary).toBe("add b.ts");
+  });
+
+  it("reports source none for an untracked file with no intent", async () => {
+    await write("loose.ts", "y\n");
+    const parsed = JSON.parse(await run(["show", "loose.ts:1", "--json"])) as { source: string };
+    expect(parsed.source).toBe("none");
+  });
+
+  it("prefers a recorded intent over blame", async () => {
+    await commit("c.ts", "alpha\nbeta\ngamma\n", "add c.ts");
+    await run(
+      ["annotate", "--json"],
+      JSON.stringify({ file: "c.ts", line_start: 1, line_end: 2, summary: "Real intent" }),
+    );
+    const out = await run(["show", "c.ts:1"]);
+    expect(out).toContain("Real intent");
+    expect(out).not.toContain("git blame");
+  });
+});
+
+describe("file — current vs superseded", () => {
+  /** Seed a live intent and a drifted (superseded) one for the same file. */
+  async function seedTwoGenerations(): Promise<void> {
+    await write("a.ts", "old logic here\n");
+    await run(
+      ["annotate", "--json"],
+      JSON.stringify({ file: "a.ts", line_start: 1, line_end: 1, summary: "Old approach" }),
+    );
+    // Overwrite so the first anchor can't relocate (drifts → superseded).
+    await write("a.ts", "new shiny logic\n");
+    await run(
+      ["annotate", "--json"],
+      JSON.stringify({ file: "a.ts", line_start: 1, line_end: 1, summary: "New approach" }),
+    );
+  }
+
+  it("splits the human output under current/superseded headers", async () => {
+    await seedTwoGenerations();
+    const out = await run(["file", "a.ts"]);
+    expect(out).toContain("# current");
+    expect(out).toContain("# superseded");
+    const supIdx = out.indexOf("# superseded");
+    expect(out.slice(0, supIdx)).toContain("New approach");
+    expect(out.slice(supIdx)).toContain("Old approach");
+  });
+
+  it("flags superseded intents in --json", async () => {
+    await seedTwoGenerations();
+    const intents = (
+      JSON.parse(await run(["file", "a.ts", "--json"])) as {
+        intents: Array<{ summary: string; superseded: boolean }>;
+      }
+    ).intents;
+    expect(intents.find((i) => i.summary === "New approach")?.superseded).toBe(false);
+    expect(intents.find((i) => i.summary === "Old approach")?.superseded).toBe(true);
+  });
+
+  it("stays flat (no headers) when nothing is superseded", async () => {
+    await seed("a.ts", "Just one");
+    const out = await run(["file", "a.ts"]);
+    expect(out).not.toContain("# current");
+    expect(out).toContain("Just one");
   });
 });
 
