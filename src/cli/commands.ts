@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { annotateIntent, updateIntent, type CaptureContext } from "../capture.js";
 import {
   getAllResolvedIntents,
@@ -80,7 +79,7 @@ export async function runCommand(
     case "backfill-transcript":
       return backfillTranscript(ctx, parsed, json);
     case "install-commit-hook":
-      return installCommitHook(ctx);
+      return installCommitHook(ctx.repoRoot);
     case "help":
     case undefined:
       return helpText();
@@ -300,34 +299,24 @@ function resolveTranscriptFiles(repoRoot: string, arg: string | undefined): stri
 const COMMIT_HOOK_MARKER = "# intent backfill hook";
 
 /**
- * Build the post-commit hook body. It pins BOTH the node binary and the CLI
- * entry to absolute paths captured at install time, so the hook is fully
- * PATH-independent.
- *
- * Why the node path matters: a bare `node` resolves through PATH, but GUI git
- * clients (Fork, Rider, SourceTree, VS Code…) don't source the shell's
- * nvm/fnm/asdf init, so a version-managed `node` isn't on their PATH — the hook
- * fires, can't find node, and `|| true` silently swallows it. Baking in
- * `process.execPath` (the node that ran the install) fixes that. We still fall
- * back to a PATH `node` if that exact binary later disappears (e.g. the nvm
- * version got uninstalled). Forward-slash both paths so git-bash is happy on
- * Windows.
+ * Build the post-commit hook body. It pins the `intent` binary to the absolute
+ * path captured at install time (`process.execPath` — for a compiled binary
+ * that's the executable itself), so the hook is fully PATH-independent and fires
+ * from GUI git clients (Fork, Rider, SourceTree, VS Code…) that don't source the
+ * shell's PATH. Forward-slash the path so git-bash is happy on Windows.
  */
 function commitHookScript(): string {
-  const entry = fileURLToPath(new URL("./main.js", import.meta.url)).replace(/\\/g, "/");
-  const node = process.execPath.replace(/\\/g, "/");
+  const bin = process.execPath.replace(/\\/g, "/");
   return (
     "#!/bin/sh\n" +
     `${COMMIT_HOOK_MARKER} — stamp commit_hash onto captured intents (never blocks a commit)\n` +
-    `NODE="${node}"\n` +
-    `[ -x "$NODE" ] || NODE=node\n` +
-    `"$NODE" --experimental-sqlite --no-warnings "${entry}" backfill >/dev/null 2>&1 || true\n`
+    `"${bin}" backfill >/dev/null 2>&1 || true\n`
   );
 }
 
 /** Install a fail-safe post-commit git hook that runs `intent backfill`. */
-async function installCommitHook(ctx: CaptureContext): Promise<string> {
-  const gitDir = await getGitDir(ctx.repoRoot);
+export async function installCommitHook(repoRoot: string): Promise<string> {
+  const gitDir = await getGitDir(repoRoot);
   const hookPath = path.join(gitDir, "hooks", "post-commit");
   const script = commitHookScript();
 
@@ -431,6 +420,7 @@ export function helpText(): string {
     "  intent update                        amend detail (JSON payload on stdin)",
     "  intent backfill                      stamp commit_hash from the HEAD commit",
     "  intent backfill-transcript [path] [--dry-run]   recover intents from transcript(s)",
+    "  intent install [--project] [--dry-run] [--no-commit-hook]   wire Claude Code hooks + git hook",
     "  intent install-commit-hook           add a post-commit hook that backfills",
     "",
     "Flags:",

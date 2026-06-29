@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { parseTranscript } from "./transcript.js";
 
 /** Build one assistant transcript line with the given content blocks. */

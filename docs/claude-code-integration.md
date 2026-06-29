@@ -2,47 +2,50 @@
 
 Three moving parts wire `intent` into Claude Code:
 
-1. **The `intent` CLI** (`bin: intent`) — capture + query over `.git/intent.db`. The single
-   interface for both humans and Claude.
-2. **The hook helper** (`bin: intent-hook`) — injects provenance into context automatically
-   and nudges Claude to capture.
+1. **The `intent` binary** — capture + query over `.git/intent.db`. The single interface for both
+   humans and Claude. A single Bun-compiled executable (`bun:sqlite` built in) — no Node, no deps.
+2. **The hook subcommand** (`intent hook`) — injects provenance into context automatically and
+   nudges Claude to capture. Folded into the one binary; branches on the hook event internally.
 3. **The `/intent` skill** ([`.claude/skills/intent/SKILL.md`](../../.claude/skills/intent/SKILL.md)) —
    teaches Claude the CLI surface + capture convention for ad-hoc, human-driven queries.
 
-Both bins are pure JS over `node:sqlite` — no native build, no runtime deps.
-> **The bundle's `install.mjs` wires all of this automatically** (`npm run bundle` →
-> `node bundle/intent/install.mjs`). The manual steps below are the fallback / explainer.
+> **`intent install` wires all of this automatically** (it's a subcommand of the binary). The
+> manual steps below are the fallback / explainer.
 
-## 1. Put the bins on PATH
+## 1. Get the binary
 
-During local dev, from the repo: `npm run build` then `npm link` (exposes `intent` +
-`intent-hook`). Or reference the built entry directly, e.g.
-`node --experimental-sqlite /abs/path/dist/cli/main.js`.
+Download a release archive (`intent-skill-<platform>.{tar.gz,zip}`) and extract it into a
+`.claude/skills/` dir, or build from source with [Bun](https://bun.sh): `bun run bundle`. On
+macOS/Linux, `chmod +x intent` (and clear the macOS quarantine on downloaded binaries:
+`xattr -d com.apple.quarantine intent`). Then `./intent install` does the rest.
 
-`node:sqlite` needs `--experimental-sqlite` on node < 23.4 (on newer node it just works). The
-installed shims pass `--experimental-sqlite --no-warnings` so this is transparent.
+To run `intent` from a shell, add its folder to PATH or symlink the binary into one — the
+installer prints the exact command. No `node`, no `--experimental-sqlite` flag: it's a native
+executable.
 
-Set `INTENT_SESSION_ID` (or `MCP_INTENT_SESSION_ID`) in the environment to stamp captures with
-a session id.
+Set `INTENT_SESSION_ID` (or legacy `MCP_INTENT_SESSION_ID`) in the environment to stamp captures
+with a session id.
 
 ## 2. Wire the hooks
 
-Merge [`examples/settings.hooks.json`](../examples/settings.hooks.json) into your Claude Code
-`settings.json` (project `.claude/settings.json` or user-level):
+`intent install` writes these for you. To do it by hand, merge
+[`examples/settings.hooks.json`](../examples/settings.hooks.json) into your Claude Code
+`settings.json` (project `.claude/settings.json` or user-level), using the binary's **absolute
+path** plus the `hook` subcommand:
 
 ```json
 {
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "intent-hook" }] }
+      { "hooks": [{ "type": "command", "command": "/abs/.claude/skills/intent/intent hook" }] }
     ],
     "PreToolUse": [
       { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "intent-hook" }] }
+        "hooks": [{ "type": "command", "command": "/abs/.claude/skills/intent/intent hook" }] }
     ],
     "PostToolUse": [
       { "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [{ "type": "command", "command": "intent-hook" }] }
+        "hooks": [{ "type": "command", "command": "/abs/.claude/skills/intent/intent hook" }] }
     ]
   }
 }
@@ -50,10 +53,9 @@ Merge [`examples/settings.hooks.json`](../examples/settings.hooks.json) into you
 
 One command handles every event — it branches on `hook_event_name` from the hook stdin payload.
 
-> **Windows / portability.** A bare `"command": "intent-hook"` only works where the POSIX shim is
-> on PATH and executable — cmd.exe / PowerShell can't run a no-extension shell script. For a
-> portable hook, invoke node directly (this is exactly what `install.mjs` writes):
-> `"command": "node --experimental-sqlite --no-warnings \"<abs>/dist/hooks/cli.js\""`.
+> **Portability.** Pointing at the binary's absolute path (rather than a bare name on PATH) means
+> the hooks fire on macOS, Linux *and* Windows alike — it's a native executable, so there's no
+> POSIX-shim-vs-cmd.exe problem. Quote the path if it contains spaces (`"\"<abs>/intent\" hook"`).
 
 ### What each hook does
 
